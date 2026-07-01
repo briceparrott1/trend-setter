@@ -30,8 +30,26 @@ def fetch_rising_queries(
     Returns:
         A list of rising queries ranked by breakout/rising percentage.
     """
-    # TODO: build a TrendReq payload with seed_keywords, call
-    # related_queries(), and merge the "rising" dataframe across keywords,
-    # sorting by rising percentage (pytrends reports "Breakout" as a spike).
-    TrendReq(hl="en-US", tz=360)
-    raise NotImplementedError
+    pytrends = TrendReq(hl="en-US", tz=360)
+    trends: list[GoogleTrend] = []
+
+    # pytrends only accepts up to 5 keywords per payload.
+    for i in range(0, len(seed_keywords), 5):
+        batch = seed_keywords[i : i + 5]
+        pytrends.build_payload(batch, geo=geo)
+        related = pytrends.related_queries()
+        for keyword_results in related.values():
+            rising_df = keyword_results.get("rising")
+            if rising_df is None or rising_df.empty:
+                continue
+            for _, row in rising_df.iterrows():
+                value = row["value"]
+                # pytrends reports a spike as the literal string "Breakout"
+                # instead of a percentage; treat it as the highest rank.
+                rising_percent = float("inf") if value == "Breakout" else float(value)
+                trends.append(
+                    GoogleTrend(query=row["query"], rising_percent=rising_percent)
+                )
+
+    trends.sort(key=lambda t: t.rising_percent, reverse=True)
+    return trends[:max_results]

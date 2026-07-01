@@ -32,10 +32,30 @@ def fetch_trending_videos(
     Returns:
         A list of currently trending YouTube videos.
     """
-    # TODO: call videos.list(chart="mostPopular", regionCode=region_code)
-    # and map the response items into YouTubeTrend records.
-    build("youtube", "v3", developerKey=api_key)
-    raise NotImplementedError
+    youtube = build("youtube", "v3", developerKey=api_key)
+    response = (
+        youtube.videos()
+        .list(
+            part="snippet,statistics",
+            chart="mostPopular",
+            regionCode=region_code,
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    trends = []
+    for item in response.get("items", []):
+        snippet = item.get("snippet", {})
+        statistics = item.get("statistics", {})
+        trends.append(
+            YouTubeTrend(
+                title=snippet.get("title", ""),
+                video_id=item.get("id", ""),
+                category_id=snippet.get("categoryId", ""),
+                view_count=int(statistics.get("viewCount", 0)),
+            )
+        )
+    return trends
 
 
 def fetch_rising_search_terms(
@@ -53,7 +73,20 @@ def fetch_rising_search_terms(
     Returns:
         A list of related search terms.
     """
-    # TODO: use search.list with order="relevance" / "viewCount" as a proxy
-    # for rising interest, since YouTube has no direct "rising terms" API.
-    build("youtube", "v3", developerKey=api_key)
-    raise NotImplementedError
+    youtube = build("youtube", "v3", developerKey=api_key)
+    response = (
+        youtube.search()
+        .list(
+            part="snippet",
+            q=query,
+            type="video",
+            order="viewCount",
+            maxResults=max_results,
+        )
+        .execute()
+    )
+    return [
+        item["snippet"]["title"]
+        for item in response.get("items", [])
+        if item.get("snippet", {}).get("title")
+    ]

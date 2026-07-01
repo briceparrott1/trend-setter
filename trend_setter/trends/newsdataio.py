@@ -15,9 +15,30 @@ async def fetch_trending_news(settings: Settings | None = None) -> list[dict]:
     Returns:
         List of dicts with 'title', 'source_id', 'link', 'pubDate', 'category'.
     """
-    # TODO: GET NEWSDATAIO_URL with apikey=settings.newsdataio_api_key,
-    # language=en, size=settings.max_trends_to_fetch. Response key is
-    # 'results'. Return parsed results list.
     settings = settings or Settings()
-    async with httpx.AsyncClient(base_url=NEWSDATAIO_URL):
-        raise NotImplementedError
+    params = {
+        "apikey": settings.newsdataio_api_key,
+        "language": "en",
+        "size": min(settings.max_trends_to_fetch, 10),
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(NEWSDATAIO_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+    results = []
+    for article in data.get("results", [])[: settings.max_trends_to_fetch]:
+        categories = article.get("category")
+        category = (
+            categories[0] if isinstance(categories, list) and categories else None
+        )
+        results.append(
+            {
+                "title": article.get("title", ""),
+                "source_id": article.get("source_id"),
+                "link": article.get("link"),
+                "pubDate": article.get("pubDate"),
+                "category": category,
+            }
+        )
+    return results
