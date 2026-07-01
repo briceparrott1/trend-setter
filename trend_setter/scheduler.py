@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -29,7 +30,7 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
         hours=settings.post_interval_hours,
         args=[settings],
         id="trend_setter_pipeline",
-        next_run_time=None,  # TODO: set to trigger an immediate first run.
+        next_run_time=datetime.now(),
     )
     return scheduler
 
