@@ -9,7 +9,7 @@ REQUIRED_ENV = {
     "KLING_API_KEY": "test-kling-key",
     "PERPLEXITY_API_KEY": "test-perplexity-key",
     "YOUTUBE_API_KEY": "test-yt-key",
-    "NEWSAPI_KEY": "test-newsapi-key",
+    "NEWSDATAIO_API_KEY": "test-newsdataio-key",
 }
 
 
@@ -25,7 +25,7 @@ def test_settings_load_from_env(monkeypatch) -> None:
     assert settings.kling_api_key == "test-kling-key"
     assert settings.perplexity_api_key == "test-perplexity-key"
     assert settings.youtube_api_key == "test-yt-key"
-    assert settings.newsapi_key == "test-newsapi-key"
+    assert settings.newsdataio_api_key == "test-newsdataio-key"
 
 
 def test_settings_defaults(monkeypatch) -> None:

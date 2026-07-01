@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     # YouTube Data API v3
     youtube_api_key: str
 
-    # NewsAPI
-    newsapi_key: str
+    # NewsData.io
+    newsdataio_api_key: str
 
     # Google Trends (no key needed — pytrends uses unofficial scraping)
     google_trends_geo: str = "US"

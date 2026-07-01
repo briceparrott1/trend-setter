@@ -3,7 +3,7 @@
 ## What it does
 
 `trend-setter` is a scheduled pipeline that monitors Google Trends,
-YouTube, and NewsAPI for rising topics, filters them through a 4-gate
+YouTube, and NewsData.io for rising topics, filters them through a 4-gate
 educational relevance check, uses Perplexity Sonar to find a surprising,
 explainable angle with citations, generates a 30-45s narrated explainer
 video (TTS voiceover + Kling AI B-roll clips + animated text overlays),
@@ -18,7 +18,7 @@ automatically, on a configurable schedule.
 - A Perplexity API account (for research)
 - A Facebook Developer app with the Instagram Graph API product enabled
 - A YouTube Data API v3 key
-- A NewsAPI account
+- A NewsData.io account
 
 ## Instagram Graph API setup
 
@@ -75,15 +75,14 @@ query lookups.
 2. Generate an API key from the account dashboard.
 3. Set `PERPLEXITY_API_KEY` in your `.env`.
 
-## NewsAPI setup
+## NewsData.io setup
 
-1. Go to [newsapi.org](https://newsapi.org) and create a free account.
-2. Copy your API key from the account dashboard.
-3. Set `NEWSAPI_KEY` in your `.env`.
+1. Go to [newsdata.io](https://newsdata.io) and sign up.
+2. Copy the API key from the dashboard as `NEWSDATAIO_API_KEY`.
+3. Set `NEWSDATAIO_API_KEY` in your `.env`.
 
-   Note: NewsAPI's free tier only works from `localhost`. For a production
-   deployment, evaluate [newsdata.io](https://newsdata.io) or a paid
-   NewsAPI plan.
+   Free tier: 200 credits/day, works in production (no localhost
+   restriction).
 
 ## Installation
 
@@ -114,7 +113,7 @@ cp .env.example .env
 | `KLING_API_KEY` | Kling AI API key for video clip generation. |
 | `PERPLEXITY_API_KEY` | Perplexity Sonar API key for topic research. |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key. |
-| `NEWSAPI_KEY` | NewsAPI key for trending headline discovery. |
+| `NEWSDATAIO_API_KEY` | NewsData.io key for trending headline discovery. |
 | `GOOGLE_TRENDS_GEO` | Geography for Google Trends rising queries, default `US`. |
 | `TREND_CATEGORIES` | Comma-separated seed categories for trend discovery, default `education,science,technology,history`. |
 | `POST_INTERVAL_HOURS` | Hours between scheduled pipeline runs, default `6`. |
@@ -136,6 +135,6 @@ immediately, then again every `POST_INTERVAL_HOURS`.
 pytest
 ```
 
-Tests mock all external API calls (Google Trends, YouTube, NewsAPI,
+Tests mock all external API calls (Google Trends, YouTube, NewsData.io,
 Perplexity, Wikipedia, Gemini, Kling AI, Instagram Graph API), so no
 credentials are required to run the suite.

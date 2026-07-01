@@ -19,13 +19,13 @@ def settings() -> Settings:
         kling_api_key="kling-key",
         perplexity_api_key="perplexity-key",
         youtube_api_key="yt-key",
-        newsapi_key="newsapi-key",
+        newsdataio_api_key="newsdataio-key",
     )
 
 
 async def test_run_pipeline_wires_all_stages(settings: Settings) -> None:
     top_candidate = TopicCandidate(
-        title="why octopuses have three hearts", source="newsapi"
+        title="why octopuses have three hearts", source="newsdataio"
     )
     research = {
         "hook_fact": "Octopuses have three hearts.",

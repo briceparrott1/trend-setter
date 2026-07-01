@@ -13,7 +13,7 @@ def main() -> None:
     """Parse CLI args, load settings, and start the scheduler."""
     parser = argparse.ArgumentParser(
         description=(
-            "Monitor Google Trends, YouTube, and NewsAPI for rising topics, "
+            "Monitor Google Trends, YouTube, and NewsData.io for rising topics, "
             "research a surprising angle via Perplexity Sonar, generate a "
             "narrated explainer video via Kling AI, and post it to Instagram Reels."
         )

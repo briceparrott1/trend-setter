@@ -1,1 +1,1 @@
-"""Trend sources: Google Trends, YouTube, NewsAPI; plus filtering and aggregation."""
+"""Trend sources: Google Trends, YouTube, NewsData.io; filtering and aggregation."""
