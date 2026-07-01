@@ -36,9 +36,7 @@ async def test_scheduler_runs_pipeline_shortly_after_start() -> None:
         scheduler = build_scheduler(_settings())
         scheduler.start()
         try:
-            await asyncio.wait_for(
-                _wait_until_called(mock_run_pipeline), timeout=5.0
-            )
+            await asyncio.wait_for(_wait_until_called(mock_run_pipeline), timeout=5.0)
         finally:
             scheduler.shutdown(wait=False)
 
