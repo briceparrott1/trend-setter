@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass
 
+import requests
 from pytrends.request import TrendReq
+
+logger = logging.getLogger(__name__)
+
+MAX_ATTEMPTS = 3
 
 
 @dataclass(slots=True)
@@ -22,6 +29,11 @@ def fetch_rising_queries(
 ) -> list[GoogleTrend]:
     """Fetch rising related queries for a set of seed keywords.
 
+    Retries up to 3 times with exponential backoff (2s, 4s, 8s) on pytrends
+    read timeouts / connection errors. If all attempts fail, logs an error
+    and returns an empty list rather than raising — `aggregate_trends`
+    already handles an empty Google Trends source gracefully.
+
     Args:
         seed_keywords: Topics/keywords to seed the trend lookup with.
         geo: Geography to restrict results to (e.g. "US").
@@ -30,6 +42,27 @@ def fetch_rising_queries(
     Returns:
         A list of rising queries ranked by breakout/rising percentage.
     """
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            return _fetch_rising_queries_once(seed_keywords, geo, max_results)
+        except (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+        ) as e:
+            if attempt == MAX_ATTEMPTS:
+                logger.error("pytrends failed after %d attempts: %s", MAX_ATTEMPTS, e)
+                return []
+            wait = 2**attempt
+            logger.warning(
+                "pytrends attempt %d failed: %s, retrying in %ds...", attempt, e, wait
+            )
+            time.sleep(wait)
+    return []
+
+
+def _fetch_rising_queries_once(
+    seed_keywords: list[str], geo: str, max_results: int
+) -> list[GoogleTrend]:
     pytrends = TrendReq(hl="en-US", tz=360)
     trends: list[GoogleTrend] = []
 

@@ -63,8 +63,9 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   standard quality, ~$0.84 per video for the 6-clip format below.
   Implementation (`generation/video.py`): submits a text2video task to
   `kling-v1` (9:16 aspect ratio, `std` mode, `kling_clip_duration`-second
-  clips), polls the task status endpoint every 5s up to a 300s timeout,
-  then downloads the resulting MP4. `generate_all_clips` runs all clips
+  clips), polls the task status endpoint every 5s up to a 600s timeout
+  (raised from 300s after observing legitimate >300s renders), then
+  downloads the resulting MP4. `generate_all_clips` runs all clips
   concurrently through an `asyncio.Semaphore(3)` (max 3 concurrent Kling
   requests) to avoid rate limits, capped at `kling_clips_per_video`
   (default 6) shot descriptions from the brief.
@@ -142,3 +143,22 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   is the newer `google.genai` package. Used here anyway because the
   design spec named `google-generativeai` explicitly; re-check whether
   `google.genai` should replace it before this ships to production.
+- `fetch_rising_queries` (`trends/google_trends.py`) retries pytrends
+  failures up to 3 attempts with exponential backoff (2s/4s/8s via
+  `time.sleep`, not `asyncio.sleep` — the function is sync and is only
+  ever called through `asyncio.to_thread` in `pipeline.py`) and returns
+  `[]` (does not raise) if all 3 attempts fail. It only retries
+  `requests.exceptions.ReadTimeout` and `requests.exceptions.ConnectionError`
+  — note the real requests exception is `ReadTimeout`, **not**
+  `ReadTimeoutError` (that name doesn't exist in `requests.exceptions`;
+  `ReadTimeoutError` is a `urllib3` class). Other exceptions propagate
+  unchanged.
+- `generate_clip`'s (`generation/video.py`) Kling polling timeout
+  (`max_wait_seconds`) is 600s, not 300s — raised after observing clips
+  that legitimately take >300s to render. `generate_all_clips` retries a
+  failing clip once (inline, inside the per-clip task) before treating it
+  as a permanent failure, then uses `asyncio.gather(..., return_exceptions=True)`
+  so one bad clip can't kill the whole batch — it raises only if fewer
+  than `max(1, kling_clips_per_video // 2)` clips succeeded. Callers of
+  `generate_all_clips` (i.e. `generate_video`) should expect the returned
+  list to sometimes be shorter than the requested clip count.
