@@ -133,6 +133,67 @@ async def test_generate_all_clips_caps_at_clips_per_video(
     ]
 
 
+async def test_generate_all_clips_retries_failed_clip_once_and_continues(
+    tmp_path: Path, settings: Settings
+) -> None:
+    shot_descriptions = [f"shot {i}" for i in range(6)]
+    call_counts: dict[int, int] = {}
+
+    async def _fake_generate_clip(description, output_path, settings):
+        idx = int(output_path.stem.split("_")[1])
+        call_counts[idx] = call_counts.get(idx, 0) + 1
+        if idx == 2 and call_counts[idx] == 1:
+            raise RuntimeError("Kling task timed out after 600s")
+        return output_path
+
+    with patch(
+        "trend_setter.generation.video.generate_clip",
+        new=AsyncMock(side_effect=_fake_generate_clip),
+    ):
+        clip_paths = await generate_all_clips(shot_descriptions, tmp_path, settings)
+
+    assert call_counts[2] == 2  # failed once, succeeded on retry
+    assert len(clip_paths) == 6
+    assert tmp_path / "clip_02.mp4" in clip_paths
+
+
+async def test_generate_all_clips_continues_when_one_clip_fails_permanently(
+    tmp_path: Path, settings: Settings
+) -> None:
+    shot_descriptions = [f"shot {i}" for i in range(6)]
+
+    async def _fake_generate_clip(description, output_path, settings):
+        idx = int(output_path.stem.split("_")[1])
+        if idx == 5:
+            raise RuntimeError("Kling task timed out after 600s")
+        return output_path
+
+    with patch(
+        "trend_setter.generation.video.generate_clip",
+        new=AsyncMock(side_effect=_fake_generate_clip),
+    ):
+        clip_paths = await generate_all_clips(shot_descriptions, tmp_path, settings)
+
+    assert len(clip_paths) == 5
+    assert tmp_path / "clip_05.mp4" not in clip_paths
+
+
+async def test_generate_all_clips_raises_when_too_few_clips_succeed(
+    tmp_path: Path, settings: Settings
+) -> None:
+    shot_descriptions = [f"shot {i}" for i in range(6)]
+
+    async def _fake_generate_clip(description, output_path, settings):
+        raise RuntimeError("Kling task timed out after 600s")
+
+    with patch(
+        "trend_setter.generation.video.generate_clip",
+        new=AsyncMock(side_effect=_fake_generate_clip),
+    ):
+        with pytest.raises(RuntimeError, match="succeeded"):
+            await generate_all_clips(shot_descriptions, tmp_path, settings)
+
+
 def test_assemble_video_trims_to_shorter_audio(tmp_path: Path) -> None:
     clip_paths = [tmp_path / "clip_00.mp4", tmp_path / "clip_01.mp4"]
     voiceover_path = tmp_path / "voiceover.mp3"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import logging
 import time
 from pathlib import Path
 
@@ -11,6 +12,8 @@ import httpx
 
 from trend_setter.config import Settings
 from trend_setter.generation.tts import generate_voiceover
+
+logger = logging.getLogger(__name__)
 
 KLING_TEXT2VIDEO_URL = "{base}/v1/videos/text2video"
 KLING_TASK_URL = "{base}/v1/videos/text2video/{task_id}"
@@ -22,7 +25,7 @@ async def generate_clip(
     shot_description: str,
     output_path: Path,
     settings: Settings,
-    max_wait_seconds: int = 300,
+    max_wait_seconds: int = 600,
 ) -> Path:
     """Generate a single video clip via Kling AI text-to-video.
 
@@ -101,21 +104,49 @@ async def generate_all_clips(
 ) -> list[Path]:
     """Generate all clips in parallel (with concurrency limit to avoid rate limits).
 
+    A clip that raises (e.g. a Kling timeout) is retried once before being
+    counted as a permanent failure. A single permanent failure does not
+    fail the whole batch as long as at least half of the requested clips
+    (``min_clips``) succeed.
+
     Returns:
-        List of paths to downloaded MP4 clips, in order.
+        List of paths to downloaded MP4 clips, in the order their tasks
+        completed (failed clips are dropped).
+
+    Raises:
+        RuntimeError: If fewer than ``min_clips`` clips succeeded.
     """
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_KLING_REQUESTS)
 
     async def _generate_one(idx: int, description: str) -> Path:
         async with semaphore:
             clip_path = output_dir / f"clip_{idx:02d}.mp4"
-            return await generate_clip(description, clip_path, settings)
+            try:
+                return await generate_clip(description, clip_path, settings)
+            except (RuntimeError, httpx.HTTPError) as e:
+                logger.warning("clip %d failed (%s), retrying once...", idx, e)
+                return await generate_clip(description, clip_path, settings)
 
     tasks = [
         _generate_one(i, desc)
         for i, desc in enumerate(shot_descriptions[: settings.kling_clips_per_video])
     ]
-    return await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    clip_paths = []
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            logger.error("clip %d failed permanently: %s", i, r)
+        else:
+            clip_paths.append(r)
+
+    min_clips = max(1, settings.kling_clips_per_video // 2)
+    if len(clip_paths) < min_clips:
+        raise RuntimeError(
+            f"Only {len(clip_paths)}/{len(results)} clips succeeded "
+            f"(minimum {min_clips})"
+        )
+    return clip_paths
 
 
 def assemble_video(
