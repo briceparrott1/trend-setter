@@ -67,7 +67,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   then downloads the resulting MP4. `generate_all_clips` runs all clips
   concurrently through an `asyncio.Semaphore(3)` (max 3 concurrent Kling
   requests) to avoid rate limits, capped at `kling_clips_per_video`
-  (default 6) shot descriptions from the brief.
+  (default 6) shot descriptions from the brief. Every clip's prompt is
+  prefixed with `settings.kling_style_prefix` (default: cinematic
+  photorealistic documentary style, 4K, professional lighting) and sent
+  alongside `settings.kling_negative_prompt` (default: excludes cartoon/
+  anime/CGI/illustration/low-quality) in the text2video payload — this
+  keeps visual style consistent across all clips in a video instead of
+  each shot description independently deciding style. Both are
+  configurable via `KLING_STYLE_PREFIX` / `KLING_NEGATIVE_PROMPT` env
+  vars, commented out with defaults shown in `.env.example`.
 - TTS voiceover: **OpenAI** (`OPENAI_API_KEY`, `generation/tts.py`) —
   `tts-1` model, `nova` voice, run via `asyncio.to_thread` since the
   `openai` SDK's `audio.speech.create` + `response.stream_to_file` are

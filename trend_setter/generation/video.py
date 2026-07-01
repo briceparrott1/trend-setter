@@ -45,7 +45,8 @@ async def generate_clip(
     }
     payload = {
         "model_name": "kling-v1",
-        "prompt": shot_description,
+        "prompt": f"{settings.kling_style_prefix} {shot_description}",
+        "negative_prompt": settings.kling_negative_prompt,
         "duration": str(settings.kling_clip_duration),
         "aspect_ratio": "9:16",  # vertical for Reels
         "mode": "std",  # standard quality

@@ -84,6 +84,11 @@ async def test_generate_clip_polls_until_succeed_and_downloads(
     assert result == output_path
     assert output_path.read_bytes() == b"fake-mp4-bytes"
     fake_client.post.assert_called_once()
+    posted_payload = fake_client.post.call_args.kwargs["json"]
+    assert posted_payload["prompt"] == (
+        f"{settings.kling_style_prefix} a cinematic shot"
+    )
+    assert posted_payload["negative_prompt"] == settings.kling_negative_prompt
     assert fake_client.get.await_count == 2
     mock_sleep.assert_awaited_once_with(5)
 
