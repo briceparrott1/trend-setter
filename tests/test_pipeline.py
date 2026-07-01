@@ -89,3 +89,29 @@ async def test_run_pipeline_wires_all_stages(settings: Settings) -> None:
     mock_video.assert_called_once_with(brief["shot_descriptions"], settings)
     mock_publish.assert_called_once()
     assert mock_publish.call_args.kwargs["caption"] == brief["caption"]
+
+
+async def test_run_pipeline_returns_none_when_no_candidates(
+    settings: Settings,
+) -> None:
+    with (
+        patch(
+            "trend_setter.pipeline.fetch_rising_queries",
+            new=MagicMock(return_value=["google-trend"]),
+        ),
+        patch(
+            "trend_setter.pipeline.fetch_trending_videos",
+            new=MagicMock(return_value=["youtube-trend"]),
+        ),
+        patch(
+            "trend_setter.pipeline.aggregate_trends",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch("trend_setter.pipeline.research_topic", new=AsyncMock()) as mock_research,
+        patch("trend_setter.pipeline.get_summary", new=AsyncMock()) as mock_wiki,
+    ):
+        media_id = await run_pipeline(settings)
+
+    assert media_id is None
+    mock_research.assert_not_called()
+    mock_wiki.assert_not_called()

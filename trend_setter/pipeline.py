@@ -23,7 +23,7 @@ from trend_setter.trends.youtube import fetch_trending_videos
 logger = logging.getLogger(__name__)
 
 
-async def run_pipeline(settings: Settings) -> str:
+async def run_pipeline(settings: Settings) -> str | None:
     """Run one full pipeline cycle: fetch trends, research, generate, and post a Reel.
 
     Stages:
@@ -42,7 +42,8 @@ async def run_pipeline(settings: Settings) -> str:
         settings: Application settings controlling every stage.
 
     Returns:
-        The published Instagram media ID.
+        The published Instagram media ID, or None if no candidate topic
+        survived the trend filter this cycle.
     """
     google_trends, youtube_trends = await asyncio.gather(
         asyncio.to_thread(
@@ -64,6 +65,9 @@ async def run_pipeline(settings: Settings) -> str:
         settings,
         max_trends=settings.max_trends_to_fetch,
     )
+    if not candidates:
+        logger.info("no trend candidates survived filtering this cycle; skipping")
+        return None
     top_candidate = candidates[0]
 
     sonar_research, wiki_summary = await asyncio.gather(
