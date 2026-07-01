@@ -30,8 +30,6 @@ async def aggregate_trends(
     Returns:
         Topic candidates that passed all 4 gates, capped at `max_trends`.
     """
-    # TODO: normalize/dedupe topic titles across sources before filtering,
-    # and rank surviving candidates by cross-platform overlap.
     news_articles = await fetch_trending_news(settings)
     candidates = [
         *(TopicCandidate(title=t.query, source="google_trends") for t in google_trends),
@@ -44,4 +42,16 @@ async def aggregate_trends(
             for a in news_articles
         ),
     ]
-    return filter_topics(candidates)[:max_trends]
+
+    # Dedupe by normalized title, keeping the first (highest-priority
+    # source order) occurrence of each.
+    seen: set[str] = set()
+    unique_candidates = []
+    for candidate in candidates:
+        key = candidate.title.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(candidate)
+
+    return filter_topics(unique_candidates)[:max_trends]

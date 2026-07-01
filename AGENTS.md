@@ -20,10 +20,21 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   error at construction if unset — that's the intended fail-fast behavior.
 - Pipeline stages are plain importable functions (`trend_setter/trends/*`,
   `generation/*`, `posting/instagram.py`), wired together in
-  `pipeline.run_pipeline`. Every stage is currently a stub that raises
-  `NotImplementedError` at its TODO point — tests patch the stage functions
-  directly in the `trend_setter.pipeline` namespace (not their defining
-  module) since `pipeline.py` imports them by name.
+  `pipeline.run_pipeline`. All stages are implemented now except
+  `generation/video.py` (Kling AI) and `posting/instagram.py` (Instagram
+  Graph API), which are still `NotImplementedError` stubs by design —
+  separate tasks. Tests patch the stage functions directly in the
+  `trend_setter.pipeline` namespace (not their defining module) since
+  `pipeline.py` imports them by name.
+- `run_pipeline` does NOT loop through candidates re-trying research on
+  gate failure — it takes `candidates[0]` (the top filtered candidate) and
+  researches only that one. Gates 2/3 (`filter.py`) are permanent
+  pass-through stubs by design: they can't be evaluated pre-research, and
+  nothing downstream currently re-checks `research["citations"]` count or
+  a `has_surprising_angle` flag against them. If stricter post-research
+  gating is wanted, it has to be added to `pipeline.run_pipeline` — don't
+  assume it already happens just because `filter.py`'s docstrings mention
+  Sonar/Wikipedia checks.
 - Async: Instagram publish, Kling AI, Perplexity, Wikipedia, and
   NewsData.io calls are native `httpx`-based async functions. YouTube and
   Google Trends fetches are sync (neither client lib is async) and are
@@ -67,6 +78,21 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - `pytrends` is unofficial (scrapes the Google Trends UI) and has
   undocumented rate limits — don't poll aggressively in real usage or
   tests that hit it live.
+- `pytrends.related_queries()` batches by keyword and only accepts up to 5
+  keywords per `build_payload()` call — `fetch_rising_queries` chunks
+  `seed_keywords` into groups of 5. Its "rising" dataframe's `value`
+  column is normally a numeric rising-percentage, but for a genuine spike
+  pytrends reports the literal string `"Breakout"` instead of a number —
+  `fetch_rising_queries` maps that to `float("inf")` so breakout queries
+  always sort first, rather than crashing on `float("Breakout")`.
+- Gate 1 (`passes_gate_1_explainability`) is a cheap heuristic, not NLP:
+  it rejects titles under 4 words, and rejects titles where every word
+  starts with a capital letter and there's no digit anywhere (read as "a
+  bare proper name/entity with no explanatory framing", e.g. "Taylor
+  Swift Eras Tour"). It will false-reject legitimate Title Case headlines
+  that happen to have no digit and no lowercase connector word — a known
+  false-positive-prone tradeoff, not a bug, per the task spec's own
+  wording ("this is a heuristic").
 - `aggregate_trends` is async (it calls `fetch_trending_news` itself)
   even though the other two trend fetches happen in `pipeline.py` before
   it's called — don't assume every `trends/*` function follows the same
