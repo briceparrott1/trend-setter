@@ -5,10 +5,11 @@ from trend_setter.config import Settings
 REQUIRED_ENV = {
     "INSTAGRAM_ACCESS_TOKEN": "test-token",
     "INSTAGRAM_ACCOUNT_ID": "12345",
-    "GOOGLE_CLOUD_PROJECT": "test-project",
+    "GEMINI_API_KEY": "test-gemini-key",
+    "KLING_API_KEY": "test-kling-key",
+    "PERPLEXITY_API_KEY": "test-perplexity-key",
     "YOUTUBE_API_KEY": "test-yt-key",
-    "REDDIT_CLIENT_ID": "test-reddit-id",
-    "REDDIT_CLIENT_SECRET": "test-reddit-secret",
+    "NEWSAPI_KEY": "test-newsapi-key",
 }
 
 
@@ -20,10 +21,11 @@ def test_settings_load_from_env(monkeypatch) -> None:
 
     assert settings.instagram_access_token == "test-token"
     assert settings.instagram_account_id == "12345"
-    assert settings.google_cloud_project == "test-project"
+    assert settings.gemini_api_key == "test-gemini-key"
+    assert settings.kling_api_key == "test-kling-key"
+    assert settings.perplexity_api_key == "test-perplexity-key"
     assert settings.youtube_api_key == "test-yt-key"
-    assert settings.reddit_client_id == "test-reddit-id"
-    assert settings.reddit_client_secret == "test-reddit-secret"
+    assert settings.newsapi_key == "test-newsapi-key"
 
 
 def test_settings_defaults(monkeypatch) -> None:
@@ -32,12 +34,13 @@ def test_settings_defaults(monkeypatch) -> None:
 
     settings = Settings(_env_file=None)
 
-    assert settings.google_cloud_location == "us-central1"
     assert settings.gemini_model == "gemini-2.0-flash-001"
-    assert settings.veo_model == "veo-002"
-    assert settings.reddit_user_agent == "trend-setter/1.0"
-    assert settings.target_subreddits == ["popular", "trending"]
     assert settings.google_trends_geo == "US"
-    assert settings.trend_categories == ["entertainment", "technology", "lifestyle"]
+    assert settings.trend_categories == [
+        "education",
+        "science",
+        "technology",
+        "history",
+    ]
     assert settings.post_interval_hours == 6
     assert settings.max_trends_to_fetch == 10

@@ -25,34 +25,36 @@ class Settings(BaseSettings):
     instagram_access_token: str
     instagram_account_id: str
 
-    # Google Cloud / Vertex AI (Gemini + Veo 2)
-    google_cloud_project: str
-    google_cloud_location: str = "us-central1"
+    # Google AI Studio (Gemini)
+    gemini_api_key: str
     gemini_model: str = "gemini-2.0-flash-001"
-    veo_model: str = "veo-002"
+
+    # Kling AI (video generation)
+    kling_api_key: str
+
+    # Perplexity Sonar (research)
+    perplexity_api_key: str
 
     # YouTube Data API v3
     youtube_api_key: str
 
-    # Reddit API (PRAW)
-    reddit_client_id: str
-    reddit_client_secret: str
-    reddit_user_agent: str = "trend-setter/1.0"
-    target_subreddits: Annotated[list[str], NoDecode] = ["popular", "trending"]
+    # NewsAPI
+    newsapi_key: str
 
-    # Google Trends (pytrends)
+    # Google Trends (no key needed — pytrends uses unofficial scraping)
     google_trends_geo: str = "US"
 
-    # Pipeline behavior
+    # Pipeline config
     trend_categories: Annotated[list[str], NoDecode] = [
-        "entertainment",
+        "education",
+        "science",
         "technology",
-        "lifestyle",
+        "history",
     ]
     post_interval_hours: int = 6
     max_trends_to_fetch: int = 10
 
-    @field_validator("target_subreddits", "trend_categories", mode="before")
+    @field_validator("trend_categories", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
         """Allow list fields to be set as a comma-separated env string."""

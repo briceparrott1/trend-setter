@@ -1,46 +1,47 @@
-"""Merge trend signals from Reddit, YouTube, and Google Trends."""
+"""Merge trend signals from Google Trends, YouTube, and NewsAPI, then filter."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from trend_setter.config import Settings
+from trend_setter.trends.filter import TopicCandidate, filter_topics
 from trend_setter.trends.google_trends import GoogleTrend
-from trend_setter.trends.reddit import RedditTrend
+from trend_setter.trends.newsapi import fetch_trending_news
 from trend_setter.trends.youtube import YouTubeTrend
 
 
-@dataclass(slots=True)
-class RankedTrend:
-    """A single cross-platform trend signal ranked by aggregate strength."""
-
-    topic: str
-    sources: list[str]
-    score: float
-
-
-def aggregate_trends(
-    reddit_trends: list[RedditTrend],
-    youtube_trends: list[YouTubeTrend],
+async def aggregate_trends(
     google_trends: list[GoogleTrend],
+    youtube_trends: list[YouTubeTrend],
+    settings: Settings,
     max_trends: int = 10,
-) -> list[RankedTrend]:
-    """Merge and rank trend signals across all three sources.
+) -> list[TopicCandidate]:
+    """Merge trend signals across sources and apply the topic hard-gate filter.
 
-    Topics that appear across multiple sources are boosted, since
-    cross-platform overlap is a stronger rising-trend signal than any
-    single source alone.
+    Fetches NewsAPI headlines directly and combines them with the
+    already-fetched Google Trends and YouTube signals before running every
+    candidate through the 4-gate filter in `trends/filter.py`.
 
     Args:
-        reddit_trends: Hot posts fetched from Reddit via PRAW.
-        youtube_trends: Trends fetched from YouTube Data API v3.
         google_trends: Rising queries fetched from Google Trends.
-        max_trends: Maximum number of ranked trends to return.
+        youtube_trends: Trends fetched from YouTube Data API v3.
+        settings: App settings, used to fetch NewsAPI headlines.
+        max_trends: Maximum number of candidates to return after filtering.
 
     Returns:
-        A list of `RankedTrend` sorted by descending score, capped at
-        `max_trends`.
+        Topic candidates that passed all 4 gates, capped at `max_trends`.
     """
-    # TODO: normalize topic names across sources (casing, punctuation),
-    # merge duplicate topics into one RankedTrend with a combined score,
-    # and sort descending by score before truncating to max_trends.
-    raise NotImplementedError
+    # TODO: normalize/dedupe topic titles across sources before filtering,
+    # and rank surviving candidates by cross-platform overlap.
+    news_articles = await fetch_trending_news(settings)
+    candidates = [
+        *(TopicCandidate(title=t.query, source="google_trends") for t in google_trends),
+        *(
+            TopicCandidate(title=t.title, source="youtube", category=t.category_id)
+            for t in youtube_trends
+        ),
+        *(
+            TopicCandidate(title=a["title"], source="newsapi", raw=a)
+            for a in news_articles
+        ),
+    ]
+    return filter_topics(candidates)[:max_trends]

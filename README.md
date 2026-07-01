@@ -2,20 +2,23 @@
 
 ## What it does
 
-`trend-setter` is a scheduled pipeline that monitors Reddit, YouTube, and
-Google Trends for rising topics, uses Gemini (Vertex AI) to synthesize a
-short-form video brief and caption from the cross-platform trend signal,
-generates a short video from that brief with Veo 2 (Vertex AI), and posts
-the result to Instagram as a Reel — automatically, on a configurable
-schedule.
+`trend-setter` is a scheduled pipeline that monitors Google Trends,
+YouTube, and NewsAPI for rising topics, filters them through a 4-gate
+educational relevance check, uses Perplexity Sonar to find a surprising,
+explainable angle with citations, generates a 30-45s narrated explainer
+video (TTS voiceover + Kling AI B-roll clips + animated text overlays),
+and posts it to Instagram Reels with on-screen source citations —
+automatically, on a configurable schedule.
 
 ## Prerequisites
 
 - Python 3.12+
-- A Google Cloud project with the Vertex AI API enabled (for Gemini + Veo 2)
+- A Google AI Studio API key (for Gemini)
+- A Kling AI account (for video generation)
+- A Perplexity API account (for research)
 - A Facebook Developer app with the Instagram Graph API product enabled
-- A Reddit API app (script type)
 - A YouTube Data API v3 key
+- A NewsAPI account
 
 ## Instagram Graph API setup
 
@@ -33,20 +36,6 @@ schedule.
    token.
 6. Set `INSTAGRAM_ACCESS_TOKEN` and `INSTAGRAM_ACCOUNT_ID` in your `.env`
    from the values above.
-
-## Reddit API setup
-
-1. Create an app at
-   [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps).
-2. Click "create another app...", give it a name, and choose the
-   **script** app type.
-3. Once created, note the `client_id` (shown under the app name) and
-   `client_secret`.
-4. Set `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT`
-   in your `.env`. Optionally set `TARGET_SUBREDDITS` to a comma-separated
-   list of subreddits to pull hot posts from (default: `popular,trending`).
-
-   This takes about 5 minutes and requires no approval.
 
 ## YouTube Data API v3 setup
 
@@ -66,18 +55,35 @@ too frequently, and expect occasional `429` responses under heavy use.
 `GOOGLE_TRENDS_GEO` controls the geography (e.g. `US`) used for rising
 query lookups.
 
-## Google Cloud / Vertex AI setup
+## Google AI Studio setup
 
-1. Create or select a GCP project at
-   [console.cloud.google.com](https://console.cloud.google.com).
-2. Enable the **Vertex AI API** under APIs & Services > Library.
-3. In Vertex AI > Model Garden, enable access to the Gemini and Veo model
-   families for your project.
-4. Create a service account with the `Vertex AI User` role, download its
-   JSON key, and set `GOOGLE_APPLICATION_CREDENTIALS` to the local path of
-   that key file.
-5. Set `GOOGLE_CLOUD_PROJECT` (and optionally `GOOGLE_CLOUD_LOCATION`,
-   `GEMINI_MODEL`, `VEO_MODEL`) in your `.env`.
+1. Go to [aistudio.google.com](https://aistudio.google.com).
+2. Click "Get API key" and create a new key.
+3. Set `GEMINI_API_KEY` in your `.env`. That's it — no billing account is
+   needed for Gemini Flash usage.
+
+## Kling AI setup
+
+1. Go to [kling.ai/dev](https://kling.ai/dev) and sign up.
+2. Copy your API key from the developer dashboard.
+3. Set `KLING_API_KEY` in your `.env`.
+
+## Perplexity API setup
+
+1. Go to [perplexity.ai/api](https://perplexity.ai/api) and create an
+   account.
+2. Generate an API key from the account dashboard.
+3. Set `PERPLEXITY_API_KEY` in your `.env`.
+
+## NewsAPI setup
+
+1. Go to [newsapi.org](https://newsapi.org) and create a free account.
+2. Copy your API key from the account dashboard.
+3. Set `NEWSAPI_KEY` in your `.env`.
+
+   Note: NewsAPI's free tier only works from `localhost`. For a production
+   deployment, evaluate [newsdata.io](https://newsdata.io) or a paid
+   NewsAPI plan.
 
 ## Installation
 
@@ -103,18 +109,14 @@ cp .env.example .env
 | --- | --- |
 | `INSTAGRAM_ACCESS_TOKEN` | Long-lived Page Access Token with Instagram publish permissions. |
 | `INSTAGRAM_ACCOUNT_ID` | Instagram Business Account ID to publish Reels to. |
-| `GOOGLE_CLOUD_PROJECT` | GCP project ID used for Vertex AI (Gemini + Veo 2). |
-| `GOOGLE_CLOUD_LOCATION` | Vertex AI region, default `us-central1`. |
-| `GEMINI_MODEL` | Gemini model used to write video briefs/captions, default `gemini-2.0-flash-001`. |
-| `VEO_MODEL` | Veo model used for video generation, default `veo-002`. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to a GCP service account JSON key with Vertex AI access. |
+| `GEMINI_API_KEY` | Google AI Studio API key for Gemini. |
+| `GEMINI_MODEL` | Gemini model used to write scripts/briefs, default `gemini-2.0-flash-001`. |
+| `KLING_API_KEY` | Kling AI API key for video clip generation. |
+| `PERPLEXITY_API_KEY` | Perplexity Sonar API key for topic research. |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key. |
-| `REDDIT_CLIENT_ID` | Reddit app client ID (script app type). |
-| `REDDIT_CLIENT_SECRET` | Reddit app client secret. |
-| `REDDIT_USER_AGENT` | User agent string sent to Reddit's API, default `trend-setter/1.0`. |
-| `TARGET_SUBREDDITS` | Comma-separated subreddits to pull hot posts from, default `popular,trending`. |
+| `NEWSAPI_KEY` | NewsAPI key for trending headline discovery. |
 | `GOOGLE_TRENDS_GEO` | Geography for Google Trends rising queries, default `US`. |
-| `TREND_CATEGORIES` | Comma-separated seed categories for trend discovery, default `entertainment,technology,lifestyle`. |
+| `TREND_CATEGORIES` | Comma-separated seed categories for trend discovery, default `education,science,technology,history`. |
 | `POST_INTERVAL_HOURS` | Hours between scheduled pipeline runs, default `6`. |
 | `MAX_TRENDS_TO_FETCH` | Max trends fetched per source per run, default `10`. |
 
@@ -125,8 +127,8 @@ python main.py
 ```
 
 This loads settings from `.env` and starts the APScheduler job, which runs
-the full trend → brief → video → post pipeline immediately, then again every
-`POST_INTERVAL_HOURS`.
+the full trend → filter → research → brief → video → post pipeline
+immediately, then again every `POST_INTERVAL_HOURS`.
 
 ## Running tests
 
@@ -134,5 +136,6 @@ the full trend → brief → video → post pipeline immediately, then again eve
 pytest
 ```
 
-Tests mock all external API calls (Reddit, YouTube, Google Trends, Vertex
-AI, Instagram Graph API), so no credentials are required to run the suite.
+Tests mock all external API calls (Google Trends, YouTube, NewsAPI,
+Perplexity, Wikipedia, Gemini, Kling AI, Instagram Graph API), so no
+credentials are required to run the suite.

@@ -1,59 +1,45 @@
-"""Veo 2 (Vertex AI): generate a short video from a video brief.
-
-Veo is not yet exposed via a dedicated `vertexai` SDK class, so generation
-goes through the Vertex AI REST `predictLongRunning` endpoint directly:
-https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-videos
-"""
+"""Video generation via Kling AI."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-
-import google.auth
-import google.auth.transport.requests
 import httpx
 
-from trend_setter.generation.brief import VideoBrief
+from trend_setter.config import Settings
 
-VERTEX_AI_API_BASE = "https://{location}-aiplatform.googleapis.com/v1"
-
-
-@dataclass(slots=True)
-class GeneratedVideo:
-    """A locally saved video file produced by Veo 2."""
-
-    file_path: Path
-    duration_seconds: float
+KLING_API_BASE = "https://api.klingai.com"
 
 
-def generate_video(
-    brief: VideoBrief,
-    project: str,
-    location: str,
-    model_name: str,
-    output_dir: Path,
-) -> GeneratedVideo:
-    """Use Veo 2 to generate a short video from a brief's scene description.
+async def generate_clip(
+    brief: str,
+    duration_seconds: int = 5,
+    settings: Settings | None = None,
+) -> bytes:
+    """Generate a single video clip via Kling AI.
 
     Args:
-        brief: The video brief to render, produced by `generate_brief`.
-        project: Google Cloud project ID for Vertex AI.
-        location: Vertex AI region (e.g. "us-central1").
-        model_name: Veo model name (e.g. "veo-002").
-        output_dir: Directory to write the generated video file into.
+        brief: Cinematic single-sentence shot description (what the camera
+            sees).
+        duration_seconds: Clip length; Kling standard supports 5 or 10s.
+        settings: App settings; loaded from env if not provided.
 
     Returns:
-        A `GeneratedVideo` pointing at the rendered file on disk.
+        Raw video bytes (mp4).
     """
-    # TODO: obtain credentials via google.auth.default(), POST the prompt to
-    # {model}:predictLongRunning, poll :fetchPredictOperation until done,
-    # then decode/download the base64 video bytes into output_dir.
-    credentials, _ = google.auth.default()
-    endpoint = (
-        f"{VERTEX_AI_API_BASE.format(location=location)}/projects/{project}"
-        f"/locations/{location}/publishers/google/models/{model_name}"
-        ":predictLongRunning"
-    )
-    with httpx.Client(base_url=endpoint):
+    # TODO: POST to KLING_API_BASE/v1/videos/text2video with bearer auth,
+    # poll the task status endpoint until complete, download and return
+    # mp4 bytes.
+    settings = settings or Settings()
+    async with httpx.AsyncClient(base_url=KLING_API_BASE):
         raise NotImplementedError
+
+
+async def generate_video(clips: list[str], settings: Settings | None = None) -> bytes:
+    """Generate a full narrated-explainer video from a list of shot descriptions.
+
+    Generates each clip independently and concatenates them in order.
+    Target: 6 clips x 5s = 30s total.
+    """
+    # TODO: gather([generate_clip(c) for c in clips]), ffmpeg-concat,
+    # return mp4 bytes.
+    settings = settings or Settings()
+    raise NotImplementedError

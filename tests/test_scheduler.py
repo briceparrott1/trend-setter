@@ -12,10 +12,11 @@ def _settings() -> Settings:
         _env_file=None,
         instagram_access_token="token",
         instagram_account_id="acct",
-        google_cloud_project="proj",
+        gemini_api_key="gemini-key",
+        kling_api_key="kling-key",
+        perplexity_api_key="perplexity-key",
         youtube_api_key="yt-key",
-        reddit_client_id="reddit-id",
-        reddit_client_secret="reddit-secret",
+        newsapi_key="newsapi-key",
     )
 
 

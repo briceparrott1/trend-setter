@@ -24,27 +24,52 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `NotImplementedError` at its TODO point — tests patch the stage functions
   directly in the `trend_setter.pipeline` namespace (not their defining
   module) since `pipeline.py` imports them by name.
-- Async: only Instagram publish is a native `httpx`-based async function.
-  Reddit (PRAW), YouTube, and Google Trends fetches are all sync (none of
-  those client libs are async) and are run via `asyncio.to_thread` inside
-  `run_pipeline`.
-- TikTok was swapped for Reddit (`trend_setter/trends/reddit.py`, via
-  `praw`) before this PR merged — captain's call, not a tech-debt fix.
-  Config fields are `reddit_client_id`, `reddit_client_secret`,
-  `reddit_user_agent` (default `trend-setter/1.0`), and
-  `target_subreddits` (default `["popular", "trending"]`, comma-separated
-  in env). `praw.Reddit(...)` is a sync/blocking client, same as the
-  YouTube and Google Trends clients — don't reach for `httpx` there.
+- Async: Instagram publish, Kling AI, Perplexity, Wikipedia, and NewsAPI
+  calls are native `httpx`-based async functions. YouTube and Google
+  Trends fetches are sync (neither client lib is async) and are run via
+  `asyncio.to_thread` inside `run_pipeline`.
+- Trend sources went through two swaps before this PR merged (captain's
+  calls, not tech-debt fixes): TikTok -> Reddit -> **NewsAPI**
+  (`trend_setter/trends/newsapi.py`). Reddit/PRAW and TikTok are both
+  fully removed now.
+- Video generation: **Kling AI** (`KLING_API_KEY`), replacing Veo 2 /
+  Vertex AI entirely. Abstracted behind `VideoGenProvider`
+  (`generation/__init__.py`) for future model swapping. Target cost is
+  ~$0.14 per 5s clip at standard quality, ~$0.84 per video for the 6-clip
+  format below.
+- Research: **Perplexity Sonar** primary (`PERPLEXITY_API_KEY`),
+  Wikipedia REST API (`research/wikipedia.py`) as a free enrichment
+  layer — no API key needed for Wikipedia. `run_pipeline` fetches both
+  concurrently for the top filtered candidate and merges the Wikipedia
+  summary into the research dict under the `"wikipedia"` key.
+- Gemini integration: **Google AI Studio** API key (`GEMINI_API_KEY`), not
+  a Vertex AI service account — uses the `google-generativeai` SDK
+  (`import google.generativeai as genai`), not `vertexai`.
+- Video format: narrated explainer — Hook (0-3s) -> Core fact (4-20s) ->
+  Supporting details (20-35s) -> Source/CTA (last 5-10s); 60-85 word
+  script; 6 x 5s Kling clips; TTS voiceover + animated text overlays.
+- Topic filter: 4-gate hard filter in `trends/filter.py`
+  (`filter_topics`) — a candidate must pass every gate (explainable in
+  <45s, surprising angle, >=2 authoritative sources, not pure
+  gossip/celebrity/sports) before it reaches the research stage.
+  `aggregate_trends` in `trends/aggregator.py` builds the candidate list
+  (Google Trends + YouTube + a NewsAPI fetch it triggers itself) and
+  applies the filter before returning.
 
 ## Sharp edges
 
-- **Veo has no dedicated Vertex AI SDK class in `google-cloud-aiplatform`
-  1.159.0** — `vertexai.preview.vision_models.VideoGenerationModel` does
-  not exist in this version, despite appearing in some docs/examples.
-  `generation/video.py` instead targets the Vertex AI REST
-  `{model}:predictLongRunning` endpoint directly via `httpx` +
-  `google.auth.default()`. Re-check the installed SDK version before
-  assuming a higher-level class exists.
+- NewsAPI's free tier only works from `localhost` — evaluate newsdata.io
+  or a paid plan before deploying anywhere else.
 - `pytrends` is unofficial (scrapes the Google Trends UI) and has
   undocumented rate limits — don't poll aggressively in real usage or
   tests that hit it live.
+- `aggregate_trends` is async (it calls `fetch_trending_news` itself)
+  even though the other two trend fetches happen in `pipeline.py` before
+  it's called — don't assume every `trends/*` function follows the same
+  "fetch in pipeline, pass in the result" shape.
+- **`google-generativeai` is fully deprecated upstream** ("All support...
+  has ended... will no longer be receiving updates or bug fixes", per the
+  package's own `FutureWarning` on import) — Google's migration guidance
+  is the newer `google.genai` package. Used here anyway because the
+  design spec named `google-generativeai` explicitly; re-check whether
+  `google.genai` should replace it before this ships to production.

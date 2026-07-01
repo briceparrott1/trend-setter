@@ -1,15 +1,12 @@
-"""Mock-based smoke test of the trend -> brief -> video -> post pipeline."""
+"""Mock-based smoke test of the trend -> research -> brief -> video -> post pipeline."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from trend_setter.config import Settings
-from trend_setter.generation.brief import VideoBrief
-from trend_setter.generation.video import GeneratedVideo
 from trend_setter.pipeline import run_pipeline
-from trend_setter.trends.aggregator import RankedTrend
+from trend_setter.trends.filter import TopicCandidate
 
 
 @pytest.fixture
@@ -18,45 +15,60 @@ def settings() -> Settings:
         _env_file=None,
         instagram_access_token="token",
         instagram_account_id="acct",
-        google_cloud_project="proj",
+        gemini_api_key="gemini-key",
+        kling_api_key="kling-key",
+        perplexity_api_key="perplexity-key",
         youtube_api_key="yt-key",
-        reddit_client_id="reddit-id",
-        reddit_client_secret="reddit-secret",
+        newsapi_key="newsapi-key",
     )
 
 
 async def test_run_pipeline_wires_all_stages(settings: Settings) -> None:
-    ranked_trend = RankedTrend(topic="cats in hats", sources=["reddit"], score=1.0)
-    brief = VideoBrief(
-        trend_topic="cats in hats",
-        scene_description="a cat wearing a hat",
-        caption="Cats in hats are trending!",
-        hashtags=["#cats", "#trending"],
+    top_candidate = TopicCandidate(
+        title="why octopuses have three hearts", source="newsapi"
     )
-    video = GeneratedVideo(file_path=Path("/tmp/video.mp4"), duration_seconds=8.0)
+    research = {
+        "hook_fact": "Octopuses have three hearts.",
+        "supporting_facts": ["Two pump blood to the gills."],
+        "citations": ["https://example.com"],
+        "raw_answer": "...",
+    }
+    wiki_summary = {"extract": "An octopus is...", "content_urls": {}}
+    brief = {
+        "script": "Did you know...",
+        "shot_descriptions": [f"shot {i}" for i in range(6)],
+        "caption": "Three hearts, one wild fact!",
+        "hashtags": ["#octopus", "#science"],
+    }
+    video_bytes = b"fake-mp4-bytes"
 
     with (
         patch(
-            "trend_setter.pipeline.fetch_hot_posts",
-            new=MagicMock(return_value=["reddit-trend"]),
+            "trend_setter.pipeline.fetch_rising_queries",
+            new=MagicMock(return_value=["google-trend"]),
         ),
         patch(
             "trend_setter.pipeline.fetch_trending_videos",
             new=MagicMock(return_value=["youtube-trend"]),
         ),
         patch(
-            "trend_setter.pipeline.fetch_rising_queries",
-            new=MagicMock(return_value=["google-trend"]),
-        ),
-        patch(
             "trend_setter.pipeline.aggregate_trends",
-            new=MagicMock(return_value=[ranked_trend]),
+            new=AsyncMock(return_value=[top_candidate]),
         ) as mock_aggregate,
         patch(
-            "trend_setter.pipeline.generate_brief", new=MagicMock(return_value=brief)
+            "trend_setter.pipeline.research_topic",
+            new=AsyncMock(return_value=research),
+        ) as mock_research,
+        patch(
+            "trend_setter.pipeline.get_summary",
+            new=AsyncMock(return_value=wiki_summary),
+        ) as mock_wiki,
+        patch(
+            "trend_setter.pipeline.generate_brief", new=AsyncMock(return_value=brief)
         ) as mock_brief,
         patch(
-            "trend_setter.pipeline.generate_video", new=MagicMock(return_value=video)
+            "trend_setter.pipeline.generate_video",
+            new=AsyncMock(return_value=video_bytes),
         ) as mock_video,
         patch(
             "trend_setter.pipeline.publish_reel",
@@ -67,12 +79,13 @@ async def test_run_pipeline_wires_all_stages(settings: Settings) -> None:
 
     assert media_id == "media-123"
     mock_aggregate.assert_called_once()
+    mock_research.assert_called_once_with(top_candidate.title, settings)
+    mock_wiki.assert_called_once_with(top_candidate.title)
     mock_brief.assert_called_once_with(
-        ranked_trend,
-        project=settings.google_cloud_project,
-        location=settings.google_cloud_location,
-        model_name=settings.gemini_model,
+        top_candidate.title,
+        {**research, "wikipedia": wiki_summary},
+        settings,
     )
-    mock_video.assert_called_once()
+    mock_video.assert_called_once_with(brief["shot_descriptions"], settings)
     mock_publish.assert_called_once()
-    assert mock_publish.call_args.kwargs["caption"] == brief.caption
+    assert mock_publish.call_args.kwargs["caption"] == brief["caption"]

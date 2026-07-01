@@ -1,4 +1,7 @@
-"""Orchestrates one full trend-setter run: trend -> brief -> video -> post."""
+"""Orchestrates one full trend-setter run.
+
+Stages: trend discovery -> filter -> research -> brief -> video -> post.
+"""
 
 from __future__ import annotations
 
@@ -11,24 +14,28 @@ from trend_setter.config import Settings
 from trend_setter.generation.brief import generate_brief
 from trend_setter.generation.video import generate_video
 from trend_setter.posting.instagram import publish_reel
+from trend_setter.research.perplexity import research_topic
+from trend_setter.research.wikipedia import get_summary
 from trend_setter.trends.aggregator import aggregate_trends
 from trend_setter.trends.google_trends import fetch_rising_queries
-from trend_setter.trends.reddit import fetch_hot_posts
 from trend_setter.trends.youtube import fetch_trending_videos
 
 logger = logging.getLogger(__name__)
 
 
 async def run_pipeline(settings: Settings) -> str:
-    """Run one full pipeline cycle: fetch trends, generate, and post a Reel.
+    """Run one full pipeline cycle: fetch trends, research, generate, and post a Reel.
 
     Stages:
-        1. Fetch trending signals from Reddit, YouTube, and Google Trends
-           in parallel.
-        2. Aggregate the cross-platform signal into a ranked trend list and
-           pick the top trend.
-        3. Use Gemini to write a video brief + caption for that trend.
-        4. Use Veo 2 to generate a short video from the brief.
+        1. Fetch trending signals from Google Trends and YouTube in
+           parallel, then merge them with NewsAPI headlines and run every
+           candidate through the 4-gate topic filter.
+        2. Research the top surviving candidate via Perplexity Sonar, with
+           a free Wikipedia enrichment lookup alongside it.
+        3. Use Gemini (Google AI Studio) to write a narrated-explainer
+           brief (script, shot descriptions, caption, hashtags).
+        4. Use Kling AI to generate a short video from the brief's shot
+           descriptions.
         5. Publish the video as an Instagram Reel.
 
     Args:
@@ -37,60 +44,52 @@ async def run_pipeline(settings: Settings) -> str:
     Returns:
         The published Instagram media ID.
     """
-    reddit_trends, youtube_trends, google_trends = await asyncio.gather(
-        asyncio.to_thread(
-            fetch_hot_posts,
-            settings.reddit_client_id,
-            settings.reddit_client_secret,
-            settings.reddit_user_agent,
-            settings.target_subreddits,
-            max_results=settings.max_trends_to_fetch,
-        ),
-        asyncio.to_thread(
-            fetch_trending_videos,
-            settings.youtube_api_key,
-            max_results=settings.max_trends_to_fetch,
-        ),
+    google_trends, youtube_trends = await asyncio.gather(
         asyncio.to_thread(
             fetch_rising_queries,
             settings.trend_categories,
             settings.google_trends_geo,
             settings.max_trends_to_fetch,
         ),
+        asyncio.to_thread(
+            fetch_trending_videos,
+            settings.youtube_api_key,
+            max_results=settings.max_trends_to_fetch,
+        ),
     )
 
-    ranked_trends = aggregate_trends(
-        reddit_trends,
-        youtube_trends,
+    candidates = await aggregate_trends(
         google_trends,
+        youtube_trends,
+        settings,
         max_trends=settings.max_trends_to_fetch,
     )
-    top_trend = ranked_trends[0]
+    top_candidate = candidates[0]
 
-    brief = generate_brief(
-        top_trend,
-        project=settings.google_cloud_project,
-        location=settings.google_cloud_location,
-        model_name=settings.gemini_model,
+    sonar_research, wiki_summary = await asyncio.gather(
+        research_topic(top_candidate.title, settings),
+        get_summary(top_candidate.title),
     )
+    research = {**sonar_research, "wikipedia": wiki_summary}
+
+    brief = await generate_brief(top_candidate.title, research, settings)
+
+    video_bytes = await generate_video(brief["shot_descriptions"], settings)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        video = generate_video(
-            brief,
-            project=settings.google_cloud_project,
-            location=settings.google_cloud_location,
-            model_name=settings.veo_model,
-            output_dir=Path(tmp_dir),
-        )
+        video_path = Path(tmp_dir) / "reel.mp4"
+        video_path.write_bytes(video_bytes)
 
         media_id = await publish_reel(
-            video.file_path,
-            caption=brief.caption,
+            video_path,
+            caption=brief["caption"],
             access_token=settings.instagram_access_token,
             account_id=settings.instagram_account_id,
         )
 
     logger.info(
-        "published Instagram Reel media_id=%s for trend=%s", media_id, top_trend.topic
+        "published Instagram Reel media_id=%s for topic=%s",
+        media_id,
+        top_candidate.title,
     )
     return media_id

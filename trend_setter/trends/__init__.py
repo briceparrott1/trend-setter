@@ -1,1 +1,1 @@
-"""Trend-source fetchers: Reddit, YouTube, Google Trends, and aggregation."""
+"""Trend sources: Google Trends, YouTube, NewsAPI; plus filtering and aggregation."""
