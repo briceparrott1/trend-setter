@@ -28,8 +28,8 @@ async def run_pipeline(settings: Settings) -> str | None:
 
     Stages:
         1. Fetch trending signals from Google Trends and YouTube in
-           parallel, then merge them with NewsAPI headlines and run every
-           candidate through the 4-gate topic filter.
+           parallel, then merge them with NewsData.io headlines and run
+           every candidate through the 4-gate topic filter.
         2. Research the top surviving candidate via Perplexity Sonar, with
            a free Wikipedia enrichment lookup alongside it.
         3. Use Gemini (Google AI Studio) to write a narrated-explainer

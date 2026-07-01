@@ -24,14 +24,16 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `NotImplementedError` at its TODO point — tests patch the stage functions
   directly in the `trend_setter.pipeline` namespace (not their defining
   module) since `pipeline.py` imports them by name.
-- Async: Instagram publish, Kling AI, Perplexity, Wikipedia, and NewsAPI
-  calls are native `httpx`-based async functions. YouTube and Google
-  Trends fetches are sync (neither client lib is async) and are run via
-  `asyncio.to_thread` inside `run_pipeline`.
-- Trend sources went through two swaps before this PR merged (captain's
-  calls, not tech-debt fixes): TikTok -> Reddit -> **NewsAPI**
-  (`trend_setter/trends/newsapi.py`). Reddit/PRAW and TikTok are both
-  fully removed now.
+- Async: Instagram publish, Kling AI, Perplexity, Wikipedia, and
+  NewsData.io calls are native `httpx`-based async functions. YouTube and
+  Google Trends fetches are sync (neither client lib is async) and are
+  run via `asyncio.to_thread` inside `run_pipeline`.
+- Trend sources went through three swaps before this PR merged (captain's
+  calls, not tech-debt fixes): TikTok -> Reddit -> NewsAPI ->
+  **NewsData.io** (`trend_setter/trends/newsdataio.py`). NewsAPI was
+  dropped because its free tier only works from `localhost`; NewsData.io's
+  free tier (200 credits/day) works in cloud production. Reddit/PRAW,
+  TikTok, and NewsAPI are all fully removed now.
 - Video generation: **Kling AI** (`KLING_API_KEY`), replacing Veo 2 /
   Vertex AI entirely. Abstracted behind `VideoGenProvider`
   (`generation/__init__.py`) for future model swapping. Target cost is
@@ -53,13 +55,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   <45s, surprising angle, >=2 authoritative sources, not pure
   gossip/celebrity/sports) before it reaches the research stage.
   `aggregate_trends` in `trends/aggregator.py` builds the candidate list
-  (Google Trends + YouTube + a NewsAPI fetch it triggers itself) and
+  (Google Trends + YouTube + a NewsData.io fetch it triggers itself) and
   applies the filter before returning.
 
 ## Sharp edges
 
-- NewsAPI's free tier only works from `localhost` — evaluate newsdata.io
-  or a paid plan before deploying anywhere else.
+- NewsData.io's free tier is 200 credits/day and works from cloud
+  production (unlike the previous NewsAPI source, which was localhost-only
+  on its free tier) — watch the credit budget if `max_trends_to_fetch` or
+  poll frequency goes up.
 - `pytrends` is unofficial (scrapes the Google Trends UI) and has
   undocumented rate limits — don't poll aggressively in real usage or
   tests that hit it live.

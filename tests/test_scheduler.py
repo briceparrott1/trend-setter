@@ -16,7 +16,7 @@ def _settings() -> Settings:
         kling_api_key="kling-key",
         perplexity_api_key="perplexity-key",
         youtube_api_key="yt-key",
-        newsapi_key="newsapi-key",
+        newsdataio_api_key="newsdataio-key",
     )
 
 

@@ -10,7 +10,7 @@ class TopicCandidate:
     """A candidate topic pulled from one of the trend sources."""
 
     title: str
-    source: str  # 'google_trends' | 'youtube' | 'newsapi'
+    source: str  # 'google_trends' | 'youtube' | 'newsdataio'
     category: str | None = None
     raw: dict | None = None
 
