@@ -15,6 +15,8 @@ automatically, on a configurable schedule.
 - Python 3.12+
 - A Google AI Studio API key (for Gemini)
 - A Kling AI account (for video generation)
+- An OpenAI API account (for TTS voiceover)
+- `ffmpeg` installed and on `PATH` (used by moviepy for video assembly)
 - A Perplexity API account (for research)
 - A Facebook Developer app with the Instagram Graph API product enabled
 - A YouTube Data API v3 key
@@ -68,6 +70,14 @@ query lookups.
 2. Copy your API key from the developer dashboard.
 3. Set `KLING_API_KEY` in your `.env`.
 
+## OpenAI TTS setup
+
+1. Go to [platform.openai.com](https://platform.openai.com) and create an
+   account (or use an existing one).
+2. Generate an API key under API keys.
+3. Set `OPENAI_API_KEY` in your `.env`. Used to synthesize the video's
+   voiceover with the `tts-1` model and the `nova` voice.
+
 ## Perplexity API setup
 
 1. Go to [perplexity.ai/api](https://perplexity.ai/api) and create an
@@ -111,6 +121,8 @@ cp .env.example .env
 | `GEMINI_API_KEY` | Google AI Studio API key for Gemini. |
 | `GEMINI_MODEL` | Gemini model used to write scripts/briefs, default `gemini-2.0-flash-001`. |
 | `KLING_API_KEY` | Kling AI API key for video clip generation. |
+| `OPENAI_API_KEY` | OpenAI API key for TTS voiceover generation. |
+| `VIDEO_OUTPUT_DIR` | Directory for generated clips/voiceover/final MP4s, default `output`. |
 | `PERPLEXITY_API_KEY` | Perplexity Sonar API key for topic research. |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key. |
 | `NEWSDATAIO_API_KEY` | NewsData.io key for trending headline discovery. |
@@ -129,6 +141,13 @@ This loads settings from `.env` and starts the APScheduler job, which runs
 the full trend → filter → research → brief → video → post pipeline
 immediately, then again every `POST_INTERVAL_HOURS`.
 
+To run a single pipeline cycle and exit (useful for end-to-end testing
+without waiting on the scheduler):
+
+```bash
+python main.py --run-once
+```
+
 ## Running tests
 
 ```bash
@@ -136,5 +155,5 @@ pytest
 ```
 
 Tests mock all external API calls (Google Trends, YouTube, NewsData.io,
-Perplexity, Wikipedia, Gemini, Kling AI, Instagram Graph API), so no
-credentials are required to run the suite.
+Perplexity, Wikipedia, Gemini, Kling AI, OpenAI TTS, Instagram Graph API),
+so no credentials are required to run the suite.
