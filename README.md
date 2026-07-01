@@ -121,8 +121,9 @@ cp .env.example .env
 python main.py
 ```
 
-This loads settings from `.env`, starts the APScheduler job, and runs the
-full trend → brief → video → post pipeline on the configured interval.
+This loads settings from `.env` and starts the APScheduler job, which runs
+the full trend → brief → video → post pipeline immediately, then again every
+`POST_INTERVAL_HOURS`.
 
 ## Running tests
 
