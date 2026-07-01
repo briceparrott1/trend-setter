@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     kling_api_base: str = "https://api.klingai.com"
     kling_clip_duration: int = 5  # seconds per clip; 5 or 10 supported
     kling_clips_per_video: int = 6  # 6 x 5s = 30s total
+    kling_style_prefix: str = (
+        "Cinematic photorealistic documentary footage, 4K, professional lighting, "
+        "high production value:"
+    )
+    kling_negative_prompt: str = (
+        "cartoon, anime, illustration, CGI, 3D animation, sketch, painting, "
+        "watercolor, low quality, blurry, distorted"
+    )
 
     # OpenAI (TTS voiceover)
     openai_api_key: str
