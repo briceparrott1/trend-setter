@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import tempfile
 from pathlib import Path
 
 from trend_setter.config import Settings
@@ -23,7 +22,7 @@ from trend_setter.trends.youtube import fetch_trending_videos
 logger = logging.getLogger(__name__)
 
 
-async def run_pipeline(settings: Settings) -> str | None:
+async def run_pipeline(settings: Settings) -> dict | None:
     """Run one full pipeline cycle: fetch trends, research, generate, and post a Reel.
 
     Stages:
@@ -34,16 +33,17 @@ async def run_pipeline(settings: Settings) -> str | None:
            a free Wikipedia enrichment lookup alongside it.
         3. Use Gemini (Google AI Studio) to write a narrated-explainer
            brief (script, shot descriptions, caption, hashtags).
-        4. Use Kling AI to generate a short video from the brief's shot
-           descriptions.
+        4. Use Kling AI + OpenAI TTS to generate a short narrated video
+           from the brief's script and shot descriptions.
         5. Publish the video as an Instagram Reel.
 
     Args:
         settings: Application settings controlling every stage.
 
     Returns:
-        The published Instagram media ID, or None if no candidate topic
-        survived the trend filter this cycle.
+        A dict with the topic, script, caption, shot descriptions,
+        citations, video path, and published media ID — or None if no
+        candidate topic survived the trend filter this cycle.
     """
     google_trends, youtube_trends = await asyncio.gather(
         asyncio.to_thread(
@@ -78,22 +78,31 @@ async def run_pipeline(settings: Settings) -> str | None:
 
     brief = await generate_brief(top_candidate.title, research, settings)
 
-    video_bytes = await generate_video(brief["shot_descriptions"], settings)
+    video_path = await generate_video(
+        shot_descriptions=brief["shot_descriptions"],
+        script=brief["script"],
+        output_dir=Path(settings.video_output_dir),
+        settings=settings,
+    )
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        video_path = Path(tmp_dir) / "reel.mp4"
-        video_path.write_bytes(video_bytes)
-
-        media_id = await publish_reel(
-            video_path,
-            caption=brief["caption"],
-            access_token=settings.instagram_access_token,
-            account_id=settings.instagram_account_id,
-        )
+    media_id = await publish_reel(
+        video_path,
+        caption=brief["caption"],
+        access_token=settings.instagram_access_token,
+        account_id=settings.instagram_account_id,
+    )
 
     logger.info(
         "published Instagram Reel media_id=%s for topic=%s",
         media_id,
         top_candidate.title,
     )
-    return media_id
+    return {
+        "topic": top_candidate.title,
+        "script": brief.get("script"),
+        "caption": brief.get("caption"),
+        "shot_descriptions": brief.get("shot_descriptions"),
+        "citations": research.get("citations"),
+        "video_path": str(video_path),
+        "media_id": media_id,
+    }

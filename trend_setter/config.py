@@ -31,6 +31,15 @@ class Settings(BaseSettings):
 
     # Kling AI (video generation)
     kling_api_key: str
+    kling_api_base: str = "https://api.klingai.com"
+    kling_clip_duration: int = 5  # seconds per clip; 5 or 10 supported
+    kling_clips_per_video: int = 6  # 6 x 5s = 30s total
+
+    # OpenAI (TTS voiceover)
+    openai_api_key: str
+
+    # Video output
+    video_output_dir: str = "output"
 
     # Perplexity Sonar (research)
     perplexity_api_key: str

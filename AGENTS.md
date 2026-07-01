@@ -11,6 +11,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Format check: `black --check .`
 - Tests: `pytest`
 - Run: `python main.py` (requires a filled-in `.env`, see README)
+- Run once (no scheduler, for end-to-end testing): `python main.py --run-once`
 
 ## Stack decisions
 
@@ -21,11 +22,19 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Pipeline stages are plain importable functions (`trend_setter/trends/*`,
   `generation/*`, `posting/instagram.py`), wired together in
   `pipeline.run_pipeline`. All stages are implemented now except
-  `generation/video.py` (Kling AI) and `posting/instagram.py` (Instagram
-  Graph API), which are still `NotImplementedError` stubs by design —
-  separate tasks. Tests patch the stage functions directly in the
+  `posting/instagram.py` (Instagram Graph API), which is still a
+  `NotImplementedError` stub by design — a separate task.
+  `generation/video.py` (Kling AI + OpenAI TTS + moviepy assembly) is
+  fully implemented. Tests patch the stage functions directly in the
   `trend_setter.pipeline` namespace (not their defining module) since
   `pipeline.py` imports them by name.
+- `run_pipeline` still unconditionally calls `publish_reel` after video
+  generation, so a real (non-mocked) `--run-once` invocation succeeds
+  through video generation and then raises `NotImplementedError` at the
+  publish step until `posting/instagram.py` is implemented — expected,
+  not a bug. `run_pipeline` now returns a dict (`topic`, `script`,
+  `caption`, `shot_descriptions`, `citations`, `video_path`, `media_id`)
+  instead of a bare media ID string.
 - `run_pipeline` does NOT loop through candidates re-trying research on
   gate failure — it takes `candidates[0]` (the top filtered candidate) and
   researches only that one. Gates 2/3 (`filter.py`) are permanent
@@ -46,10 +55,40 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   free tier (200 credits/day) works in cloud production. Reddit/PRAW,
   TikTok, and NewsAPI are all fully removed now.
 - Video generation: **Kling AI** (`KLING_API_KEY`), replacing Veo 2 /
-  Vertex AI entirely. Abstracted behind `VideoGenProvider`
-  (`generation/__init__.py`) for future model swapping. Target cost is
-  ~$0.14 per 5s clip at standard quality, ~$0.84 per video for the 6-clip
-  format below.
+  Vertex AI entirely. `VideoGenProvider` (`generation/__init__.py`) is an
+  unused abstract base left over from an earlier design pass — its
+  `generate_clip`/`generate_video` signatures no longer match the
+  concrete functions in `generation/video.py` and nothing imports it;
+  don't assume it's wired in. Target cost is ~$0.14 per 5s clip at
+  standard quality, ~$0.84 per video for the 6-clip format below.
+  Implementation (`generation/video.py`): submits a text2video task to
+  `kling-v1` (9:16 aspect ratio, `std` mode, `kling_clip_duration`-second
+  clips), polls the task status endpoint every 5s up to a 300s timeout,
+  then downloads the resulting MP4. `generate_all_clips` runs all clips
+  concurrently through an `asyncio.Semaphore(3)` (max 3 concurrent Kling
+  requests) to avoid rate limits, capped at `kling_clips_per_video`
+  (default 6) shot descriptions from the brief.
+- TTS voiceover: **OpenAI** (`OPENAI_API_KEY`, `generation/tts.py`) —
+  `tts-1` model, `nova` voice, run via `asyncio.to_thread` since the
+  `openai` SDK's `audio.speech.create` + `response.stream_to_file` are
+  sync calls.
+- Assembly (`generation/video.py:assemble_video`): **moviepy 1.x**
+  (`from moviepy.editor import ...`) — pinned `<2.0.0` because moviepy 2.x
+  renamed/removed the `moviepy.editor` module and changed several method
+  names (breaking API change, not just a version bump). Concatenates all
+  clips in order, lays the TTS voiceover over the full video, and matches
+  video duration to voiceover duration by trimming (`subclip`) if the
+  video is longer, or looping the last clip (`vfx.loop`) if the voiceover
+  is longer. `generate_video` runs TTS and Kling clip generation
+  concurrently via `asyncio.gather`, then runs the (blocking) moviepy
+  assembly step via `asyncio.to_thread`.
+- Output layout: final video at
+  `{video_output_dir}/trend_setter_{timestamp}.mp4`; intermediate clips
+  in `{video_output_dir}/clips_{timestamp}/clip_00.mp4` etc.; voiceover at
+  `{video_output_dir}/voiceover_{timestamp}.mp3`. `video_output_dir`
+  defaults to `output/` (`VIDEO_OUTPUT_DIR` env var) and is created if
+  missing — nothing currently cleans up intermediate clips/voiceover
+  files after assembly.
 - Research: **Perplexity Sonar** primary (`PERPLEXITY_API_KEY`),
   Wikipedia REST API (`research/wikipedia.py`) as a free enrichment
   layer — no API key needed for Wikipedia. `run_pipeline` fetches both

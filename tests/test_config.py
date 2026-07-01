@@ -10,6 +10,7 @@ REQUIRED_ENV = {
     "PERPLEXITY_API_KEY": "test-perplexity-key",
     "YOUTUBE_API_KEY": "test-yt-key",
     "NEWSDATAIO_API_KEY": "test-newsdataio-key",
+    "OPENAI_API_KEY": "test-openai-key",
 }
 
 
@@ -26,6 +27,7 @@ def test_settings_load_from_env(monkeypatch) -> None:
     assert settings.perplexity_api_key == "test-perplexity-key"
     assert settings.youtube_api_key == "test-yt-key"
     assert settings.newsdataio_api_key == "test-newsdataio-key"
+    assert settings.openai_api_key == "test-openai-key"
 
 
 def test_settings_defaults(monkeypatch) -> None:
@@ -44,3 +46,7 @@ def test_settings_defaults(monkeypatch) -> None:
     ]
     assert settings.post_interval_hours == 6
     assert settings.max_trends_to_fetch == 10
+    assert settings.video_output_dir == "output"
+    assert settings.kling_api_base == "https://api.klingai.com"
+    assert settings.kling_clip_duration == 5
+    assert settings.kling_clips_per_video == 6

@@ -17,6 +17,7 @@ def _settings() -> Settings:
         perplexity_api_key="perplexity-key",
         youtube_api_key="yt-key",
         newsdataio_api_key="newsdataio-key",
+        openai_api_key="openai-key",
     )
 
 
