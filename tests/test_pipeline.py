@@ -20,13 +20,13 @@ def settings() -> Settings:
         instagram_account_id="acct",
         google_cloud_project="proj",
         youtube_api_key="yt-key",
-        tiktok_client_key="tt-key",
-        tiktok_client_secret="tt-secret",
+        reddit_client_id="reddit-id",
+        reddit_client_secret="reddit-secret",
     )
 
 
 async def test_run_pipeline_wires_all_stages(settings: Settings) -> None:
-    ranked_trend = RankedTrend(topic="cats in hats", sources=["tiktok"], score=1.0)
+    ranked_trend = RankedTrend(topic="cats in hats", sources=["reddit"], score=1.0)
     brief = VideoBrief(
         trend_topic="cats in hats",
         scene_description="a cat wearing a hat",
@@ -37,8 +37,8 @@ async def test_run_pipeline_wires_all_stages(settings: Settings) -> None:
 
     with (
         patch(
-            "trend_setter.pipeline.fetch_trending_hashtags",
-            new=AsyncMock(return_value=["tiktok-trend"]),
+            "trend_setter.pipeline.fetch_hot_posts",
+            new=MagicMock(return_value=["reddit-trend"]),
         ),
         patch(
             "trend_setter.pipeline.fetch_trending_videos",

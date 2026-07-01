@@ -13,7 +13,7 @@ from trend_setter.generation.video import generate_video
 from trend_setter.posting.instagram import publish_reel
 from trend_setter.trends.aggregator import aggregate_trends
 from trend_setter.trends.google_trends import fetch_rising_queries
-from trend_setter.trends.tiktok import fetch_trending_hashtags
+from trend_setter.trends.reddit import fetch_hot_posts
 from trend_setter.trends.youtube import fetch_trending_videos
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ async def run_pipeline(settings: Settings) -> str:
     """Run one full pipeline cycle: fetch trends, generate, and post a Reel.
 
     Stages:
-        1. Fetch trending signals from TikTok, YouTube, and Google Trends
+        1. Fetch trending signals from Reddit, YouTube, and Google Trends
            in parallel.
         2. Aggregate the cross-platform signal into a ranked trend list and
            pick the top trend.
@@ -37,10 +37,13 @@ async def run_pipeline(settings: Settings) -> str:
     Returns:
         The published Instagram media ID.
     """
-    tiktok_trends, youtube_trends, google_trends = await asyncio.gather(
-        fetch_trending_hashtags(
-            settings.tiktok_client_key,
-            settings.tiktok_client_secret,
+    reddit_trends, youtube_trends, google_trends = await asyncio.gather(
+        asyncio.to_thread(
+            fetch_hot_posts,
+            settings.reddit_client_id,
+            settings.reddit_client_secret,
+            settings.reddit_user_agent,
+            settings.target_subreddits,
             max_results=settings.max_trends_to_fetch,
         ),
         asyncio.to_thread(
@@ -57,7 +60,7 @@ async def run_pipeline(settings: Settings) -> str:
     )
 
     ranked_trends = aggregate_trends(
-        tiktok_trends,
+        reddit_trends,
         youtube_trends,
         google_trends,
         max_trends=settings.max_trends_to_fetch,

@@ -1,11 +1,11 @@
-"""Merge trend signals from TikTok, YouTube, and Google Trends."""
+"""Merge trend signals from Reddit, YouTube, and Google Trends."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from trend_setter.trends.google_trends import GoogleTrend
-from trend_setter.trends.tiktok import TikTokTrend
+from trend_setter.trends.reddit import RedditTrend
 from trend_setter.trends.youtube import YouTubeTrend
 
 
@@ -19,7 +19,7 @@ class RankedTrend:
 
 
 def aggregate_trends(
-    tiktok_trends: list[TikTokTrend],
+    reddit_trends: list[RedditTrend],
     youtube_trends: list[YouTubeTrend],
     google_trends: list[GoogleTrend],
     max_trends: int = 10,
@@ -31,7 +31,7 @@ def aggregate_trends(
     single source alone.
 
     Args:
-        tiktok_trends: Trends fetched from the TikTok Research API.
+        reddit_trends: Hot posts fetched from Reddit via PRAW.
         youtube_trends: Trends fetched from YouTube Data API v3.
         google_trends: Rising queries fetched from Google Trends.
         max_trends: Maximum number of ranked trends to return.

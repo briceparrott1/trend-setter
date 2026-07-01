@@ -1,1 +1,1 @@
-"""Trend-source fetchers: TikTok, YouTube, Google Trends, and aggregation."""
+"""Trend-source fetchers: Reddit, YouTube, Google Trends, and aggregation."""

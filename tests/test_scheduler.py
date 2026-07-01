@@ -14,8 +14,8 @@ def _settings() -> Settings:
         instagram_account_id="acct",
         google_cloud_project="proj",
         youtube_api_key="yt-key",
-        tiktok_client_key="tt-key",
-        tiktok_client_secret="tt-secret",
+        reddit_client_id="reddit-id",
+        reddit_client_secret="reddit-secret",
     )
 
 

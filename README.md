@@ -2,7 +2,7 @@
 
 ## What it does
 
-`trend-setter` is a scheduled pipeline that monitors TikTok, YouTube, and
+`trend-setter` is a scheduled pipeline that monitors Reddit, YouTube, and
 Google Trends for rising topics, uses Gemini (Vertex AI) to synthesize a
 short-form video brief and caption from the cross-platform trend signal,
 generates a short video from that brief with Veo 2 (Vertex AI), and posts
@@ -14,7 +14,7 @@ schedule.
 - Python 3.12+
 - A Google Cloud project with the Vertex AI API enabled (for Gemini + Veo 2)
 - A Facebook Developer app with the Instagram Graph API product enabled
-- A TikTok Developer account with Research API access
+- A Reddit API app (script type)
 - A YouTube Data API v3 key
 
 ## Instagram Graph API setup
@@ -34,18 +34,19 @@ schedule.
 6. Set `INSTAGRAM_ACCESS_TOKEN` and `INSTAGRAM_ACCOUNT_ID` in your `.env`
    from the values above.
 
-## TikTok Research API setup
+## Reddit API setup
 
-1. Apply for TikTok for Developers Research API access at
-   [developers.tiktok.com](https://developers.tiktok.com).
-2. Create an app in the developer portal and request approval for the
-   **Research API** product.
-3. Once approved, obtain your app's `client_key` and `client_secret` from
-   the app's credentials page.
-4. Set `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in your `.env`.
+1. Create an app at
+   [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps).
+2. Click "create another app...", give it a name, and choose the
+   **script** app type.
+3. Once created, note the `client_id` (shown under the app name) and
+   `client_secret`.
+4. Set `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT`
+   in your `.env`. Optionally set `TARGET_SUBREDDITS` to a comma-separated
+   list of subreddits to pull hot posts from (default: `popular,trending`).
 
-   Note: Research API access requires manual approval from TikTok and may
-   take several days (or longer) to be granted.
+   This takes about 5 minutes and requires no approval.
 
 ## YouTube Data API v3 setup
 
@@ -108,8 +109,10 @@ cp .env.example .env
 | `VEO_MODEL` | Veo model used for video generation, default `veo-002`. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to a GCP service account JSON key with Vertex AI access. |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key. |
-| `TIKTOK_CLIENT_KEY` | TikTok for Developers app client key (Research API). |
-| `TIKTOK_CLIENT_SECRET` | TikTok for Developers app client secret (Research API). |
+| `REDDIT_CLIENT_ID` | Reddit app client ID (script app type). |
+| `REDDIT_CLIENT_SECRET` | Reddit app client secret. |
+| `REDDIT_USER_AGENT` | User agent string sent to Reddit's API, default `trend-setter/1.0`. |
+| `TARGET_SUBREDDITS` | Comma-separated subreddits to pull hot posts from, default `popular,trending`. |
 | `GOOGLE_TRENDS_GEO` | Geography for Google Trends rising queries, default `US`. |
 | `TREND_CATEGORIES` | Comma-separated seed categories for trend discovery, default `entertainment,technology,lifestyle`. |
 | `POST_INTERVAL_HOURS` | Hours between scheduled pipeline runs, default `6`. |
@@ -131,5 +134,5 @@ the full trend → brief → video → post pipeline immediately, then again eve
 pytest
 ```
 
-Tests mock all external API calls (TikTok, YouTube, Google Trends, Vertex
+Tests mock all external API calls (Reddit, YouTube, Google Trends, Vertex
 AI, Instagram Graph API), so no credentials are required to run the suite.

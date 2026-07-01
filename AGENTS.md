@@ -24,9 +24,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   `NotImplementedError` at its TODO point — tests patch the stage functions
   directly in the `trend_setter.pipeline` namespace (not their defining
   module) since `pipeline.py` imports them by name.
-- Async: TikTok fetch and Instagram publish are `httpx`-based async
-  functions; YouTube/Google Trends fetches are sync (client libs aren't
-  async) and are run via `asyncio.to_thread` inside `run_pipeline`.
+- Async: only Instagram publish is a native `httpx`-based async function.
+  Reddit (PRAW), YouTube, and Google Trends fetches are all sync (none of
+  those client libs are async) and are run via `asyncio.to_thread` inside
+  `run_pipeline`.
+- TikTok was swapped for Reddit (`trend_setter/trends/reddit.py`, via
+  `praw`) before this PR merged — captain's call, not a tech-debt fix.
+  Config fields are `reddit_client_id`, `reddit_client_secret`,
+  `reddit_user_agent` (default `trend-setter/1.0`), and
+  `target_subreddits` (default `["popular", "trending"]`, comma-separated
+  in env). `praw.Reddit(...)` is a sync/blocking client, same as the
+  YouTube and Google Trends clients — don't reach for `httpx` there.
 
 ## Sharp edges
 

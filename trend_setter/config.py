@@ -34,9 +34,11 @@ class Settings(BaseSettings):
     # YouTube Data API v3
     youtube_api_key: str
 
-    # TikTok Research API
-    tiktok_client_key: str
-    tiktok_client_secret: str
+    # Reddit API (PRAW)
+    reddit_client_id: str
+    reddit_client_secret: str
+    reddit_user_agent: str = "trend-setter/1.0"
+    target_subreddits: Annotated[list[str], NoDecode] = ["popular", "trending"]
 
     # Google Trends (pytrends)
     google_trends_geo: str = "US"
@@ -50,10 +52,10 @@ class Settings(BaseSettings):
     post_interval_hours: int = 6
     max_trends_to_fetch: int = 10
 
-    @field_validator("trend_categories", mode="before")
+    @field_validator("target_subreddits", "trend_categories", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
-        """Allow `TREND_CATEGORIES` to be a comma-separated env string."""
+        """Allow list fields to be set as a comma-separated env string."""
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
