@@ -21,11 +21,6 @@ KLING_TASK_URL = "{base}/v1/videos/text2video/{task_id}"
 
 MAX_CONCURRENT_KLING_REQUESTS = 3
 
-# Kling clips are always requested at 9:16 (see `generate_clip`'s
-# `aspect_ratio` payload field), so caption sizing/positioning is hardcoded
-# to this instead of introspecting the assembled video's actual size.
-CAPTION_VIDEO_SIZE = (1080, 1920)
-
 
 async def generate_clip(
     shot_description: str,
@@ -186,16 +181,20 @@ def _estimate_caption_segments(
     return timed_segments
 
 
-def _build_subtitle_clips(script: str, duration: float) -> list:
+def _build_subtitle_clips(
+    script: str, duration: float, video_size: tuple[int, int]
+) -> list:
     """Build burned-in caption TextClips, styled for legibility on a phone screen.
 
     High-contrast white text with a black stroke, positioned in the lower-
     middle area (clear of Instagram's own UI chrome, which occupies the
-    very bottom and top of the frame).
+    very bottom and top of the frame). `video_size` is the actual assembled
+    video's (width, height) — captions are sized/positioned relative to it
+    so they stay on-screen regardless of Kling's true output resolution.
     """
     from moviepy.editor import TextClip
 
-    width, height = CAPTION_VIDEO_SIZE
+    width, _height = video_size
     clips = []
     for text, start, end in _estimate_caption_segments(script, duration):
         clip = (
@@ -212,7 +211,7 @@ def _build_subtitle_clips(script: str, duration: float) -> list:
             )
             .set_start(start)
             .set_duration(end - start)
-            .set_position(("center", int(height * 0.7)))
+            .set_position(("center", 0.7), relative=True)
         )
         clips.append(clip)
     return clips
@@ -256,7 +255,7 @@ def assemble_video(
     else:
         video = video.subclip(0, audio.duration)
 
-    subtitle_clips = _build_subtitle_clips(script, audio.duration)
+    subtitle_clips = _build_subtitle_clips(script, audio.duration, video.size)
     if subtitle_clips:
         video = CompositeVideoClip([video, *subtitle_clips])
 

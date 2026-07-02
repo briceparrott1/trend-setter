@@ -212,7 +212,7 @@ def test_assemble_video_trims_to_shorter_audio(tmp_path: Path) -> None:
 
     mock_clips = [MagicMock(duration=5.0) for _ in clip_paths]
     mock_video = MagicMock(duration=10.0)
-    mock_trimmed = MagicMock()
+    mock_trimmed = MagicMock(size=(1080, 1920))
     mock_video.subclip.return_value = mock_trimmed
     mock_composited = MagicMock()
     mock_final = MagicMock()
@@ -261,7 +261,7 @@ def test_assemble_video_loops_last_clip_when_audio_longer(tmp_path: Path) -> Non
     mock_looped_last = MagicMock()
     mock_clips[1].fx.return_value = mock_looped_last
     mock_video_short = MagicMock(duration=10.0)
-    mock_video_extended = MagicMock()
+    mock_video_extended = MagicMock(size=(1080, 1920))
     mock_composited = MagicMock()
     mock_final = MagicMock()
     mock_composited.set_audio.return_value = mock_final
@@ -313,7 +313,7 @@ def test_assemble_video_burns_one_caption_clip_per_script_segment(
 
     mock_clip = MagicMock(duration=10.0)
     mock_video = MagicMock(duration=10.0)
-    mock_trimmed = MagicMock()
+    mock_trimmed = MagicMock(size=(1080, 1920))
     mock_video.subclip.return_value = mock_trimmed
     mock_composited = MagicMock()
     mock_final = MagicMock()
