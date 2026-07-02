@@ -251,6 +251,31 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   any environment that actually renders video (not needed for the test
   suite, which mocks `moviepy.editor.TextClip`/`CompositeVideoClip`
   entirely).
+  **Font resolution: use a real font file path, never a bare ImageMagick
+  font alias.** `_build_subtitle_clips` originally hardcoded
+  `font="Arial-Bold"` (a bare ImageMagick font *alias*, not a file path).
+  A live `--run-once` pipeline run (pipeline-run-5) crashed at this exact
+  line with `OSError: ... [Errno 2] No such file or directory: 'unset'`
+  even with ImageMagick installed — moviepy's `IMAGEMAGICK_BINARY` silently
+  defaults to the literal string `'unset'` when auto-detection fails, and
+  separately, a bare font alias only resolves if the host's ImageMagick
+  font database happens to have that exact name registered, which it
+  commonly doesn't (e.g. `convert -list font` returns **zero** fonts on a
+  fresh macOS Homebrew `imagemagick` install, even though the OS itself
+  has Arial via `fc-list`/Font Book). Fixed by `_resolve_caption_font()`
+  (`video.py`), which checks a fixed list of well-known per-OS font *file
+  paths* (`_CAPTION_FONT_CANDIDATES` — Liberation Sans Bold on Linux via
+  the `fonts-liberation` package, DejaVu Sans Bold as a Linux fallback via
+  `fonts-dejavu-core`, macOS's bundled Arial Bold.ttf) and passes the first
+  one that exists as an explicit file path to `TextClip`, bypassing
+  ImageMagick's font-alias database entirely. Raises a clear `RuntimeError`
+  naming the packages to install if none of the candidates exist, instead
+  of moviepy's confusing "unset" error. **Production/cloud deployment must
+  have one of `fonts-liberation` or `fonts-dejavu-core` installed
+  alongside ImageMagick** — verify this is in whatever base image/Dockerfile
+  actually ships to production, since neither font package is a Python
+  dependency and nothing currently checks for it at startup (only at the
+  first real caption-render call).
 - **TTS voice/speed are now `Settings` fields**, not hardcoded in
   `tts.py`: `tts_voice` (default `"shimmer"`, chosen as OpenAI's
   brightest/most energetic voice) and `tts_speed` (default `1.2`, in the

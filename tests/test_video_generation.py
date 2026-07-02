@@ -204,6 +204,39 @@ def _mock_text_clip() -> MagicMock:
     return clip
 
 
+def test_resolve_caption_font_returns_first_existing_candidate(
+    tmp_path: Path,
+) -> None:
+    from trend_setter.generation import video as video_module
+
+    missing = tmp_path / "missing.ttf"
+    present = tmp_path / "present.ttf"
+    present.write_bytes(b"")
+    fallback = tmp_path / "fallback.ttf"
+    fallback.write_bytes(b"")
+
+    with patch.object(
+        video_module,
+        "_CAPTION_FONT_CANDIDATES",
+        [str(missing), str(present), str(fallback)],
+    ):
+        assert video_module._resolve_caption_font() == str(present)
+
+
+def test_resolve_caption_font_raises_with_actionable_message_when_none_exist(
+    tmp_path: Path,
+) -> None:
+    from trend_setter.generation import video as video_module
+
+    with patch.object(
+        video_module,
+        "_CAPTION_FONT_CANDIDATES",
+        [str(tmp_path / "a.ttf"), str(tmp_path / "b.ttf")],
+    ):
+        with pytest.raises(RuntimeError, match="No caption font found"):
+            video_module._resolve_caption_font()
+
+
 def test_assemble_video_trims_to_shorter_audio(tmp_path: Path) -> None:
     clip_paths = [tmp_path / "clip_00.mp4", tmp_path / "clip_01.mp4"]
     voiceover_path = tmp_path / "voiceover.mp3"
@@ -337,6 +370,50 @@ def test_assemble_video_burns_one_caption_clip_per_script_segment(
     composited_args = mock_composite.call_args.args[0]
     assert composited_args[0] == mock_trimmed
     assert len(composited_args) == 3
+
+
+def test_assemble_video_passes_a_resolved_font_path_not_a_bare_alias(
+    tmp_path: Path,
+) -> None:
+    """Regression test: TextClip must receive a real font file path, not a
+    bare ImageMagick font alias like "Arial-Bold". A bare alias only
+    resolves if the host's ImageMagick font database happens to have that
+    exact name registered — it commonly doesn't (see
+    `_resolve_caption_font`'s docstring) — so passing one crashes real
+    (non-mocked) caption rendering with a confusing ImageMagick error."""
+    clip_paths = [tmp_path / "clip_00.mp4"]
+    voiceover_path = tmp_path / "voiceover.mp3"
+    output_path = tmp_path / "final.mp4"
+    script = "Did you know octopuses have three hearts?"
+    fake_font = str(tmp_path / "LiberationSans-Bold.ttf")
+
+    mock_clip = MagicMock(duration=10.0)
+    mock_video = MagicMock(duration=10.0)
+    mock_trimmed = MagicMock(size=(1080, 1920))
+    mock_video.subclip.return_value = mock_trimmed
+    mock_composited = MagicMock()
+    mock_final = MagicMock()
+    mock_composited.set_audio.return_value = mock_final
+    mock_audio = MagicMock(duration=8.0)
+
+    with (
+        patch("moviepy.editor.VideoFileClip", return_value=mock_clip),
+        patch("moviepy.editor.concatenate_videoclips", return_value=mock_video),
+        patch("moviepy.editor.AudioFileClip", return_value=mock_audio),
+        patch("moviepy.editor.TextClip") as mock_text_clip_cls,
+        patch("moviepy.editor.CompositeVideoClip", return_value=mock_composited),
+        patch(
+            "trend_setter.generation.video._resolve_caption_font",
+            return_value=fake_font,
+        ),
+    ):
+        mock_text_clip_cls.side_effect = lambda *a, **k: _mock_text_clip()
+        assemble_video(clip_paths, voiceover_path, output_path, script)
+
+    assert mock_text_clip_cls.call_count >= 1
+    for call in mock_text_clip_cls.call_args_list:
+        assert call.kwargs["font"] == fake_font
+        assert call.kwargs["font"] != "Arial-Bold"
 
 
 async def test_generate_video_orchestrates_tts_clips_and_assembly(
