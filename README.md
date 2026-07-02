@@ -122,7 +122,7 @@ cp .env.example .env
 | `GEMINI_MODEL` | Gemini model used to write scripts/briefs, default `gemini-2.0-flash-001`. |
 | `KLING_API_KEY` | Kling AI API key for video clip generation. |
 | `OPENAI_API_KEY` | OpenAI API key for TTS voiceover generation. |
-| `VIDEO_OUTPUT_DIR` | Directory for generated clips/voiceover/final MP4s, default `output`. |
+| `VIDEO_OUTPUT_DIR` | Directory for generated clips/voiceover/final MP4s and per-run `report_*.json` files, default `output`. |
 | `PERPLEXITY_API_KEY` | Perplexity Sonar API key for topic research. |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 key. |
 | `NEWSDATAIO_API_KEY` | NewsData.io key for trending headline discovery. |
@@ -147,6 +147,11 @@ without waiting on the scheduler):
 ```bash
 python main.py --run-once
 ```
+
+Each cycle that picks a topic writes a progressive run report to
+`{VIDEO_OUTPUT_DIR}/report_{timestamp}.json`, rewritten after every stage
+(topic chosen, research, brief, video, publish). If a run fails partway
+through, the report still holds whatever was generated up to that point.
 
 ## Running tests
 

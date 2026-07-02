@@ -17,3 +17,6 @@ venv/
 
 # OS
 .DS_Store
+
+# Runtime output (videos, clips, voiceovers, run reports)
+output/
