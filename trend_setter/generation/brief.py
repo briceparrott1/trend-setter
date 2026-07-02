@@ -16,13 +16,34 @@ Topic: {topic}
 Hook fact: {hook_fact}
 Supporting facts:
 {supporting_facts}
+Full research notes (read this carefully — it is the ONLY basis you may \
+use to decide whether a specific claim is attributable to a named person):
+{research_notes}
 Sources: {citations}
 
 Write a script with this exact structure:
-- HOOK (0-3s): Start with the surprising fact as a bold claim or question. \
-Must land in the first 1.5 seconds.
-- CORE (4-20s): Expand on the hook with 1 central idea. Clear, simple \
-language.
+- HOOK (0-3s): Open with the single strongest claim. Must land in the \
+first 1.5 seconds. Choose exactly ONE of these two hook styles, based \
+strictly on what the research notes above actually support:
+    1. ATTRIBUTED hook — use this ONLY if the research notes contain a \
+    specific, sourced claim or quote clearly attributable to one named \
+    person (a named scientist, official, researcher, or other identified \
+    individual who is on record with that specific claim). Phrase it as: \
+    "Did you know [named person] believes/claims [Y]?" The CORE beat that \
+    immediately follows must then contextualize it with "According to \
+    [named person], ..." plus the actual sourced claim.
+    2. NON-ATTRIBUTED hook — use this in every other case, including when \
+    you are unsure: general facts, statistics, or findings with no single \
+    clearly-named, directly-quotable person behind them. Never invent or \
+    imply a specific person's belief, claim, or quote that the research \
+    notes don't clearly support — that is a fabrication risk, not a style \
+    choice. Instead phrase the hook as a general claim, e.g. "Some \
+    believe...", "There's a claim that...", "Reportedly, ...", or a plain \
+    surprising-fact framing ("Did you know [surprising fact]?").
+    When in doubt, default to the NON-ATTRIBUTED hook.
+- CORE (4-20s): Expand on the hook with 1 central idea. If you used the \
+ATTRIBUTED hook, this is where the "According to [named person]..." \
+contextualization goes. Clear, simple language.
 - DETAILS (20-35s): Add 2-3 supporting facts that build on the core idea.
 - SOURCE_CTA (35-45s): Cite the source(s) by name and say "follow for more \
 facts like this."
@@ -30,8 +51,11 @@ facts like this."
 Target: 60-85 words total. Simple vocabulary. No jargon.
 
 Also write:
-- 6 shot descriptions for AI video generation (one sentence each \
-describing what the camera sees, cinematic style, no text/people)
+- 6 shot descriptions for AI video generation (one sentence each, \
+cinematic style). Each shot MUST feature real people actively DOING \
+something concrete and relevant to the topic — demonstrating, reacting, \
+gesturing, in motion — not a static establishing shot of an empty scene \
+or a slow camera pan. No on-screen text in any shot.
 - An Instagram caption (2-3 sentences + hashtags)
 
 Respond with valid JSON only, no markdown, in this exact shape:
@@ -72,10 +96,25 @@ async def generate_brief(
     )
     citations = ", ".join(research.get("citations", [])[:3]) or "authoritative sources"
 
+    # Passed through so the model has enough raw context to judge whether a
+    # claim is genuinely attributable to a named person (see the ATTRIBUTED
+    # vs. NON-ATTRIBUTED hook branches in SCRIPT_PROMPT) — the extracted
+    # hook_fact/supporting_facts fields alone are usually too condensed to
+    # carry that judgment.
+    research_notes_parts = []
+    raw_answer = research.get("raw_answer", "")
+    if raw_answer:
+        research_notes_parts.append(raw_answer)
+    wikipedia = research.get("wikipedia")
+    if isinstance(wikipedia, dict) and wikipedia.get("extract"):
+        research_notes_parts.append(wikipedia["extract"])
+    research_notes = "\n".join(research_notes_parts) or "No additional research notes."
+
     prompt = SCRIPT_PROMPT.format(
         topic=topic,
         hook_fact=research.get("hook_fact", ""),
         supporting_facts=supporting_facts,
+        research_notes=research_notes,
         citations=citations,
     )
 

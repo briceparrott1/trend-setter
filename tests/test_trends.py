@@ -4,11 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from trend_setter.config import Settings
 from trend_setter.trends.aggregator import aggregate_trends
-from trend_setter.trends.filter import (
-    TopicCandidate,
-    passes_gate_1_explainability,
-    passes_gate_4_not_gossip,
-)
+from trend_setter.trends.filter import TopicCandidate, passes_gate_1_explainability
 from trend_setter.trends.google_trends import GoogleTrend
 from trend_setter.trends.youtube import YouTubeTrend
 
@@ -56,33 +52,6 @@ def test_gate_1_accepts_title_case_headline_with_a_number() -> None:
     assert passes_gate_1_explainability(topic) is True
 
 
-# -- Gate 4: not gossip/celebrity/sports/gaming/music -----------------------
-
-
-def test_gate_4_rejects_youtube_entertainment_category_id() -> None:
-    topic = TopicCandidate(title="some video", source="youtube", category="24")
-
-    assert passes_gate_4_not_gossip(topic) is False
-
-
-def test_gate_4_rejects_youtube_gaming_category_id() -> None:
-    topic = TopicCandidate(title="some video", source="youtube", category="20")
-
-    assert passes_gate_4_not_gossip(topic) is False
-
-
-def test_gate_4_accepts_youtube_science_category_id() -> None:
-    topic = TopicCandidate(title="some video", source="youtube", category="28")
-
-    assert passes_gate_4_not_gossip(topic) is True
-
-
-def test_gate_4_accepts_missing_category() -> None:
-    topic = TopicCandidate(title="some article", source="newsdataio")
-
-    assert passes_gate_4_not_gossip(topic) is True
-
-
 # -- Aggregator dedup --------------------------------------------------------
 
 
@@ -112,3 +81,29 @@ async def test_aggregate_trends_dedupes_case_and_whitespace_across_sources() -> 
     # the first occurrence (Google Trends) should survive deduplication.
     assert len(candidates) == 1
     assert candidates[0].source == "google_trends"
+
+
+# -- Aggregator controversy ranking ------------------------------------------
+
+
+async def test_aggregate_trends_ranks_scandalous_candidate_ahead_of_neutral() -> None:
+    """When max_trends would otherwise cut the neutral candidate first (source
+    order puts it ahead), the scandalous-reading candidate must be ranked
+    ahead and survive truncation instead."""
+    google_trends = [
+        GoogleTrend(query="why octopuses have three hearts", rising_percent=100.0),
+        GoogleTrend(
+            query="senator accused of election fraud scandal", rising_percent=50.0
+        ),
+    ]
+
+    with patch(
+        "trend_setter.trends.aggregator.fetch_trending_news",
+        new=AsyncMock(return_value=[]),
+    ):
+        candidates = await aggregate_trends(
+            google_trends, youtube_trends=[], settings=_settings(), max_trends=1
+        )
+
+    assert len(candidates) == 1
+    assert candidates[0].title == "senator accused of election fraud scandal"

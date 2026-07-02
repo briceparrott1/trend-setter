@@ -50,3 +50,5 @@ def test_settings_defaults(monkeypatch) -> None:
     assert settings.kling_api_base == "https://api.klingai.com"
     assert settings.kling_clip_duration == 5
     assert settings.kling_clips_per_video == 6
+    assert settings.tts_voice == "shimmer"
+    assert settings.tts_speed == 1.2

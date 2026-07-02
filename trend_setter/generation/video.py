@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -19,6 +20,11 @@ KLING_TEXT2VIDEO_URL = "{base}/v1/videos/text2video"
 KLING_TASK_URL = "{base}/v1/videos/text2video/{task_id}"
 
 MAX_CONCURRENT_KLING_REQUESTS = 3
+
+# Kling clips are always requested at 9:16 (see `generate_clip`'s
+# `aspect_ratio` payload field), so caption sizing/positioning is hardcoded
+# to this instead of introspecting the assembled video's actual size.
+CAPTION_VIDEO_SIZE = (1080, 1920)
 
 
 async def generate_clip(
@@ -149,22 +155,93 @@ async def generate_all_clips(
     return clip_paths
 
 
+def _split_script_into_captions(script: str) -> list[str]:
+    """Split narration into caption-sized segments on sentence/clause breaks."""
+    segments = re.split(r"(?<=[.!?,])\s+", script.strip())
+    return [segment.strip() for segment in segments if segment.strip()]
+
+
+def _estimate_caption_segments(
+    script: str, duration: float
+) -> list[tuple[str, float, float]]:
+    """Estimate (text, start, end) timing for each caption segment.
+
+    OpenAI TTS returns no word-level alignment data, so timing is estimated
+    by distributing `duration` across segments proportional to each
+    segment's word count. This is "good enough" sync, not exact alignment.
+    """
+    segments = _split_script_into_captions(script)
+    if not segments or duration <= 0:
+        return []
+
+    word_counts = [max(len(segment.split()), 1) for segment in segments]
+    total_words = sum(word_counts)
+
+    timed_segments = []
+    t = 0.0
+    for segment, words in zip(segments, word_counts, strict=True):
+        seg_duration = duration * words / total_words
+        timed_segments.append((segment, t, t + seg_duration))
+        t += seg_duration
+    return timed_segments
+
+
+def _build_subtitle_clips(script: str, duration: float) -> list:
+    """Build burned-in caption TextClips, styled for legibility on a phone screen.
+
+    High-contrast white text with a black stroke, positioned in the lower-
+    middle area (clear of Instagram's own UI chrome, which occupies the
+    very bottom and top of the frame).
+    """
+    from moviepy.editor import TextClip
+
+    width, height = CAPTION_VIDEO_SIZE
+    clips = []
+    for text, start, end in _estimate_caption_segments(script, duration):
+        clip = (
+            TextClip(
+                text,
+                fontsize=58,
+                color="white",
+                font="Arial-Bold",
+                stroke_color="black",
+                stroke_width=3,
+                method="caption",
+                size=(int(width * 0.9), None),
+                align="center",
+            )
+            .set_start(start)
+            .set_duration(end - start)
+            .set_position(("center", int(height * 0.7)))
+        )
+        clips.append(clip)
+    return clips
+
+
 def assemble_video(
     clip_paths: list[Path],
     voiceover_path: Path,
     output_path: Path,
+    script: str,
 ) -> Path:
-    """Assemble clips + voiceover into a final MP4 using moviepy.
+    """Assemble clips + voiceover + burned-in captions into a final MP4 using moviepy.
 
     - Concatenates all clips in order.
     - Lays the voiceover audio over the full video.
     - Trims (or loops the last clip) to match voiceover duration.
+    - Burns in caption text derived from `script`, timed proportionally
+      across the final (voiceover-matched) duration.
     - Outputs a 9:16 vertical MP4.
 
     Returns:
         Path to the assembled video.
     """
-    from moviepy.editor import AudioFileClip, VideoFileClip, concatenate_videoclips
+    from moviepy.editor import (
+        AudioFileClip,
+        CompositeVideoClip,
+        VideoFileClip,
+        concatenate_videoclips,
+    )
 
     clips = [VideoFileClip(str(p)) for p in clip_paths]
     video = concatenate_videoclips(clips, method="compose")
@@ -178,6 +255,10 @@ def assemble_video(
         video = concatenate_videoclips(clips[:-1] + [last], method="compose")
     else:
         video = video.subclip(0, audio.duration)
+
+    subtitle_clips = _build_subtitle_clips(script, audio.duration)
+    if subtitle_clips:
+        video = CompositeVideoClip([video, *subtitle_clips])
 
     final = video.set_audio(audio)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,10 +302,16 @@ async def generate_video(
     final_path = output_dir / f"trend_setter_{timestamp}.mp4"
 
     voiceover_path, clip_paths = await asyncio.gather(
-        generate_voiceover(script, voiceover_path, settings.openai_api_key),
+        generate_voiceover(
+            script,
+            voiceover_path,
+            settings.openai_api_key,
+            voice=settings.tts_voice,
+            speed=settings.tts_speed,
+        ),
         generate_all_clips(shot_descriptions, clips_dir, settings),
     )
 
     return await asyncio.to_thread(
-        assemble_video, clip_paths, voiceover_path, final_path
+        assemble_video, clip_paths, voiceover_path, final_path, script
     )
