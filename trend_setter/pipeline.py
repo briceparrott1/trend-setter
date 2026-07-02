@@ -54,6 +54,14 @@ async def run_pipeline(settings: Settings) -> dict | None:
            from the brief's script and shot descriptions.
         5. Publish the video as an Instagram Reel.
 
+    Once a topic survives the trend filter, a `RunReport` (see
+    `trend_setter.report`) is written to
+    `{settings.video_output_dir}/report_{timestamp}.json` and rewritten to
+    disk after every stage, so a failure partway through (e.g. a Kling/TTS
+    error, or the `posting/instagram.py` `NotImplementedError` stub) still
+    leaves the already-generated topic/research/brief/video recoverable on
+    disk.
+
     Args:
         settings: Application settings controlling every stage.
 
