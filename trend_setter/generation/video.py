@@ -181,6 +181,44 @@ def _estimate_caption_segments(
     return timed_segments
 
 
+# Well-known per-OS install locations for a bold sans-serif font, checked
+# in order by `_resolve_caption_font`. Liberation Sans is metrically
+# compatible with Arial and is the most common bold sans-serif font
+# pre-installed (or installable via `fonts-liberation`) on cloud/CI Linux
+# images; DejaVu Sans is the near-universal Linux fallback; macOS ships
+# Arial directly.
+_CAPTION_FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/liberation/LiberationSans-Bold.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+]
+
+
+def _resolve_caption_font() -> str:
+    """Find an installed bold sans-serif font file for burned-in captions.
+
+    moviepy's `TextClip` shells out to ImageMagick, which resolves a bare
+    font *name* (e.g. the previously-hardcoded "Arial-Bold") via
+    ImageMagick's own font database — that database is commonly empty on a
+    fresh ImageMagick install (observed on macOS's Homebrew `imagemagick`
+    formula: `convert -list font` returns zero registered fonts out of the
+    box), so a bare alias fails with a confusing "unable to read font"
+    error instead of anything actionable. Passing an explicit font *file
+    path* bypasses ImageMagick's font database lookup entirely, so this
+    checks a fixed list of well-known per-OS install locations instead.
+    """
+    for candidate in _CAPTION_FONT_CANDIDATES:
+        if Path(candidate).is_file():
+            return candidate
+    raise RuntimeError(
+        "No caption font found for burned-in subtitles. Install one of: "
+        "the 'fonts-liberation' or 'fonts-dejavu-core' package (Linux), "
+        "or ensure macOS's bundled Arial Bold.ttf is present. Checked: "
+        f"{_CAPTION_FONT_CANDIDATES}"
+    )
+
+
 def _build_subtitle_clips(
     script: str, duration: float, video_size: tuple[int, int]
 ) -> list:
@@ -195,6 +233,7 @@ def _build_subtitle_clips(
     from moviepy.editor import TextClip
 
     width, _height = video_size
+    font = _resolve_caption_font()
     clips = []
     for text, start, end in _estimate_caption_segments(script, duration):
         clip = (
@@ -202,7 +241,7 @@ def _build_subtitle_clips(
                 text,
                 fontsize=58,
                 color="white",
-                font="Arial-Bold",
+                font=font,
                 stroke_color="black",
                 stroke_width=3,
                 method="caption",
