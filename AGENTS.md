@@ -117,6 +117,34 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   (Google Trends + YouTube + a NewsData.io fetch it triggers itself) and
   applies the filter before returning.
 
+- Progressive run report: `trend_setter/report.py`'s `RunReport` writes a
+  JSON file to `{video_output_dir}/report_{timestamp}.json` and rewrites
+  it (full overwrite, not append) to disk on every stage boundary in
+  `run_pipeline` — topic chosen, research complete, brief generated,
+  video generated, publish attempted/failed. This exists because a run
+  that fails at or after brief generation (Kling/TTS failure, or the
+  `posting/instagram.py` `NotImplementedError` stub) used to leave zero
+  record on disk of what had already been generated; a prior scout run
+  had to recover a lost script by transcribing the saved voiceover MP3
+  with Whisper. `run_pipeline` wraps every stage from research onward in
+  a single `try/except Exception`, calling `report.record_failure(exc)`
+  (which tags the report with `failed_after_stage`, the last
+  successfully-completed stage name) before re-raising — so the
+  exception still propagates to callers (`main.py --run-once` still
+  exits non-zero / logs the traceback) but the report file on disk
+  captures everything generated up to that point. The report is only
+  created *after* a topic survives the trend filter (`candidates[0]` is
+  chosen) — the "no candidates survived filtering" early-return produces
+  no report file at all, by design, since there's no topic yet to report
+  on. `_clip_paths_for_video` (`pipeline.py`) derives the clip directory
+  from the final video's `trend_setter_{timestamp}.mp4` filename to find
+  the sibling `clips_{timestamp}/` dir — this is a convention lookup, not
+  a value `generate_video` returns directly, so it silently returns `[]`
+  if the naming convention ever changes. `output/` (the default
+  `video_output_dir`) is now gitignored, since it accumulates run
+  reports alongside videos/clips/voiceovers and was never meant to be
+  committed.
+
 ## Sharp edges
 
 - NewsData.io's free tier is 200 credits/day and works from cloud
