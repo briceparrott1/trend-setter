@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from trend_setter.config import Settings
 from trend_setter.trends.filter import TopicCandidate, filter_topics
 from trend_setter.trends.google_trends import GoogleTrend
@@ -63,6 +65,10 @@ _CONTROVERSY_KEYWORDS = frozenset(
     }
 )
 
+_CONTROVERSY_KEYWORD_PATTERN = re.compile(
+    "|".join(rf"\b{re.escape(keyword)}\b" for keyword in _CONTROVERSY_KEYWORDS)
+)
+
 
 def _controversy_score(candidate: TopicCandidate) -> int:
     """Cheap keyword count of scandal/controversy signal in a candidate's title.
@@ -72,7 +78,7 @@ def _controversy_score(candidate: TopicCandidate) -> int:
     not gate anything.
     """
     title_lower = candidate.title.lower()
-    return sum(1 for keyword in _CONTROVERSY_KEYWORDS if keyword in title_lower)
+    return len(_CONTROVERSY_KEYWORD_PATTERN.findall(title_lower))
 
 
 async def aggregate_trends(
