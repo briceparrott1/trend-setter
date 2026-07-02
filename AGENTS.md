@@ -237,10 +237,15 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   required `script` param (signature change) and composites
   `_build_subtitle_clips`'s `TextClip`s over the trimmed/looped video via
   `CompositeVideoClip` before attaching audio. Caption styling (white
-  text, black stroke, positioned at `height * 0.7`, sized to
-  `CAPTION_VIDEO_SIZE = (1080, 1920)` — Kling's fixed 9:16 output,
-  hardcoded rather than read from the actual video object) lives in
-  `_build_subtitle_clips`; adjust there if legibility needs tuning.
+  text, black stroke, positioned at 70% of frame height via a *relative*
+  `set_position(("center", 0.7), relative=True)`, sized to 90% of frame
+  width) lives in `_build_subtitle_clips`, which takes the assembled
+  video's actual `(width, height)` (`video.size`) as a parameter rather
+  than a hardcoded constant — an earlier version hardcoded
+  `CAPTION_VIDEO_SIZE = (1080, 1920)` assuming Kling's clips are always
+  9:16, but that silently mispositioned captions whenever the assembled
+  video's real dimensions differed; this was fixed by reading `video.size`
+  directly. Adjust `_build_subtitle_clips` if legibility needs tuning.
   **New runtime dependency:** moviepy 1.x's `TextClip` shells out to
   ImageMagick's `convert` binary — it must be installed and on `PATH` in
   any environment that actually renders video (not needed for the test

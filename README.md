@@ -79,7 +79,8 @@ query lookups.
    account (or use an existing one).
 2. Generate an API key under API keys.
 3. Set `OPENAI_API_KEY` in your `.env`. Used to synthesize the video's
-   voiceover with the `tts-1` model and the `nova` voice.
+   voiceover with the `tts-1` model and the `shimmer` voice by default
+   (configurable via `TTS_VOICE`/`TTS_SPEED`, see `.env.example`).
 
 ## Perplexity API setup
 

@@ -13,7 +13,9 @@ from trend_setter.trends.youtube import YouTubeTrend
 # Keyword heuristic for "scandalous/polarizing/controversial" signal — same
 # cheap, deterministic style as the gate-1 explainability heuristic in
 # `trends/filter.py`. Not exhaustive; a candidate's score is just how many
-# of these keywords appear in its title (case-insensitive substring match).
+# of these keywords appear in its title (case-insensitive, whole-word match
+# via `_CONTROVERSY_KEYWORD_PATTERN` — substrings inside other words don't
+# count, e.g. "banned" won't match inside "bannednews").
 _CONTROVERSY_KEYWORDS = frozenset(
     {
         "scandal",
@@ -91,7 +93,7 @@ async def aggregate_trends(
 
     Fetches NewsData.io headlines directly and combines them with the
     already-fetched Google Trends and YouTube signals before running every
-    candidate through the 4-gate filter in `trends/filter.py`.
+    candidate through the 3-gate filter in `trends/filter.py`.
 
     Args:
         google_trends: Rising queries fetched from Google Trends.
