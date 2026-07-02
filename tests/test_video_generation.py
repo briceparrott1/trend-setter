@@ -194,18 +194,31 @@ async def test_generate_all_clips_raises_when_too_few_clips_succeed(
             await generate_all_clips(shot_descriptions, tmp_path, settings)
 
 
+def _mock_text_clip() -> MagicMock:
+    """A TextClip mock whose chained set_start/set_duration/set_position calls
+    return itself, matching moviepy's fluent chaining API."""
+    clip = MagicMock()
+    clip.set_start.return_value = clip
+    clip.set_duration.return_value = clip
+    clip.set_position.return_value = clip
+    return clip
+
+
 def test_assemble_video_trims_to_shorter_audio(tmp_path: Path) -> None:
     clip_paths = [tmp_path / "clip_00.mp4", tmp_path / "clip_01.mp4"]
     voiceover_path = tmp_path / "voiceover.mp3"
     output_path = tmp_path / "final.mp4"
+    script = "Did you know octopuses have three hearts?"
 
     mock_clips = [MagicMock(duration=5.0) for _ in clip_paths]
     mock_video = MagicMock(duration=10.0)
-    mock_trimmed = MagicMock()
+    mock_trimmed = MagicMock(size=(1080, 1920))
     mock_video.subclip.return_value = mock_trimmed
+    mock_composited = MagicMock()
     mock_final = MagicMock()
-    mock_trimmed.set_audio.return_value = mock_final
+    mock_composited.set_audio.return_value = mock_final
     mock_audio = MagicMock(duration=6.0)
+    mock_text_clip = _mock_text_clip()
 
     with (
         patch(
@@ -215,14 +228,19 @@ def test_assemble_video_trims_to_shorter_audio(tmp_path: Path) -> None:
             "moviepy.editor.concatenate_videoclips", return_value=mock_video
         ) as mock_concat,
         patch("moviepy.editor.AudioFileClip", return_value=mock_audio),
+        patch("moviepy.editor.TextClip", return_value=mock_text_clip),
+        patch(
+            "moviepy.editor.CompositeVideoClip", return_value=mock_composited
+        ) as mock_composite,
     ):
-        result = assemble_video(clip_paths, voiceover_path, output_path)
+        result = assemble_video(clip_paths, voiceover_path, output_path, script)
 
     mock_video_file_clip.assert_any_call(str(clip_paths[0]))
     mock_video_file_clip.assert_any_call(str(clip_paths[1]))
     mock_concat.assert_called_once_with(mock_clips, method="compose")
     mock_video.subclip.assert_called_once_with(0, 6.0)
-    mock_trimmed.set_audio.assert_called_once_with(mock_audio)
+    mock_composite.assert_called_once_with([mock_trimmed, mock_text_clip])
+    mock_composited.set_audio.assert_called_once_with(mock_audio)
     mock_final.write_videofile.assert_called_once_with(
         str(output_path),
         codec="libx264",
@@ -237,15 +255,18 @@ def test_assemble_video_loops_last_clip_when_audio_longer(tmp_path: Path) -> Non
     clip_paths = [tmp_path / "clip_00.mp4", tmp_path / "clip_01.mp4"]
     voiceover_path = tmp_path / "voiceover.mp3"
     output_path = tmp_path / "final.mp4"
+    script = "Did you know octopuses have three hearts?"
 
     mock_clips = [MagicMock(duration=5.0), MagicMock(duration=5.0)]
     mock_looped_last = MagicMock()
     mock_clips[1].fx.return_value = mock_looped_last
     mock_video_short = MagicMock(duration=10.0)
-    mock_video_extended = MagicMock()
+    mock_video_extended = MagicMock(size=(1080, 1920))
+    mock_composited = MagicMock()
     mock_final = MagicMock()
-    mock_video_extended.set_audio.return_value = mock_final
+    mock_composited.set_audio.return_value = mock_final
     mock_audio = MagicMock(duration=20.0)
+    mock_text_clip = _mock_text_clip()
 
     with (
         patch("moviepy.editor.VideoFileClip", side_effect=mock_clips),
@@ -254,13 +275,68 @@ def test_assemble_video_loops_last_clip_when_audio_longer(tmp_path: Path) -> Non
             side_effect=[mock_video_short, mock_video_extended],
         ) as mock_concat,
         patch("moviepy.editor.AudioFileClip", return_value=mock_audio),
+        patch("moviepy.editor.TextClip", return_value=mock_text_clip),
+        patch("moviepy.editor.CompositeVideoClip", return_value=mock_composited),
     ):
-        result = assemble_video(clip_paths, voiceover_path, output_path)
+        result = assemble_video(clip_paths, voiceover_path, output_path, script)
 
     mock_clips[1].fx.assert_called_once()
     assert mock_concat.call_count == 2
-    mock_video_extended.set_audio.assert_called_once_with(mock_audio)
+    mock_composited.set_audio.assert_called_once_with(mock_audio)
     assert result == output_path
+
+
+def test_estimate_caption_segments_distributes_timing_proportionally() -> None:
+    from trend_setter.generation.video import _estimate_caption_segments
+
+    script = "Octopuses have three hearts. Two pump blood to the gills."
+    segments = _estimate_caption_segments(script, duration=10.0)
+
+    assert [text for text, _, _ in segments] == [
+        "Octopuses have three hearts.",
+        "Two pump blood to the gills.",
+    ]
+    # 4 words then 6 words -> proportional 4.0s then 6.0s of a 10s total.
+    assert segments[0][1] == pytest.approx(0.0)
+    assert segments[0][2] == pytest.approx(4.0)
+    assert segments[1][1] == pytest.approx(4.0)
+    assert segments[1][2] == pytest.approx(10.0)
+
+
+def test_assemble_video_burns_one_caption_clip_per_script_segment(
+    tmp_path: Path,
+) -> None:
+    clip_paths = [tmp_path / "clip_00.mp4"]
+    voiceover_path = tmp_path / "voiceover.mp3"
+    output_path = tmp_path / "final.mp4"
+    script = "Did you know octopuses have three hearts? That is wild."
+
+    mock_clip = MagicMock(duration=10.0)
+    mock_video = MagicMock(duration=10.0)
+    mock_trimmed = MagicMock(size=(1080, 1920))
+    mock_video.subclip.return_value = mock_trimmed
+    mock_composited = MagicMock()
+    mock_final = MagicMock()
+    mock_composited.set_audio.return_value = mock_final
+    mock_audio = MagicMock(duration=8.0)
+
+    with (
+        patch("moviepy.editor.VideoFileClip", return_value=mock_clip),
+        patch("moviepy.editor.concatenate_videoclips", return_value=mock_video),
+        patch("moviepy.editor.AudioFileClip", return_value=mock_audio),
+        patch("moviepy.editor.TextClip") as mock_text_clip_cls,
+        patch(
+            "moviepy.editor.CompositeVideoClip", return_value=mock_composited
+        ) as mock_composite,
+    ):
+        mock_text_clip_cls.side_effect = lambda *a, **k: _mock_text_clip()
+        assemble_video(clip_paths, voiceover_path, output_path, script)
+
+    # "Did you know octopuses have three hearts?" + "That is wild." = 2 segments.
+    assert mock_text_clip_cls.call_count == 2
+    composited_args = mock_composite.call_args.args[0]
+    assert composited_args[0] == mock_trimmed
+    assert len(composited_args) == 3
 
 
 async def test_generate_video_orchestrates_tts_clips_and_assembly(
@@ -274,7 +350,11 @@ async def test_generate_video_orchestrates_tts_clips_and_assembly(
     with (
         patch(
             "trend_setter.generation.video.generate_voiceover",
-            new=AsyncMock(side_effect=lambda script, output_path, api_key: output_path),
+            new=AsyncMock(
+                side_effect=lambda script, output_path, api_key, voice, speed: (
+                    output_path
+                )
+            ),
         ) as mock_tts,
         patch(
             "trend_setter.generation.video.generate_all_clips",
@@ -291,6 +371,8 @@ async def test_generate_video_orchestrates_tts_clips_and_assembly(
     mock_tts.assert_awaited_once()
     assert mock_tts.await_args.args[0] == script
     assert mock_tts.await_args.args[2] == settings.openai_api_key
+    assert mock_tts.await_args.kwargs["voice"] == settings.tts_voice
+    assert mock_tts.await_args.kwargs["speed"] == settings.tts_speed
 
     mock_clips.assert_awaited_once()
     clips_call_args = mock_clips.await_args.args
@@ -301,3 +383,4 @@ async def test_generate_video_orchestrates_tts_clips_and_assembly(
 
     mock_assemble.assert_called_once()
     assert mock_assemble.call_args.args[0] == clip_paths
+    assert mock_assemble.call_args.args[3] == script

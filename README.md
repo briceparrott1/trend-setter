@@ -3,12 +3,13 @@
 ## What it does
 
 `trend-setter` is a scheduled pipeline that monitors Google Trends,
-YouTube, and NewsData.io for rising topics, filters them through a 4-gate
-educational relevance check, uses Perplexity Sonar to find a surprising,
-explainable angle with citations, generates a 30-45s narrated explainer
-video (TTS voiceover + Kling AI B-roll clips + animated text overlays),
-and posts it to Instagram Reels with on-screen source citations —
-automatically, on a configurable schedule.
+YouTube, and NewsData.io for rising topics, filters them through a 3-gate
+relevance check (and ranks the survivors so scandalous/polarizing topics
+are prioritized), uses Perplexity Sonar to find a surprising, explainable
+angle with citations, generates a 30-45s narrated explainer video (TTS
+voiceover + Kling AI B-roll clips + burned-in captions), and posts it to
+Instagram Reels with on-screen source citations — automatically, on a
+configurable schedule.
 
 ## Prerequisites
 
@@ -17,6 +18,8 @@ automatically, on a configurable schedule.
 - A Kling AI account (for video generation)
 - An OpenAI API account (for TTS voiceover)
 - `ffmpeg` installed and on `PATH` (used by moviepy for video assembly)
+- ImageMagick installed and on `PATH` (used by moviepy's `TextClip` to
+  burn in captions)
 - A Perplexity API account (for research)
 - A Facebook Developer app with the Instagram Graph API product enabled
 - A YouTube Data API v3 key
@@ -76,7 +79,8 @@ query lookups.
    account (or use an existing one).
 2. Generate an API key under API keys.
 3. Set `OPENAI_API_KEY` in your `.env`. Used to synthesize the video's
-   voiceover with the `tts-1` model and the `nova` voice.
+   voiceover with the `tts-1` model and the `shimmer` voice by default
+   (configurable via `TTS_VOICE`/`TTS_SPEED`, see `.env.example`).
 
 ## Perplexity API setup
 

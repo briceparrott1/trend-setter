@@ -14,6 +14,7 @@ async def generate_voiceover(
     api_key: str,
     model: str = "tts-1",
     voice: str = "nova",
+    speed: float = 1.0,
 ) -> Path:
     """Generate a voiceover MP3 from a script using OpenAI TTS.
 
@@ -23,7 +24,11 @@ async def generate_voiceover(
         api_key: OpenAI API key.
         model: TTS model ('tts-1' for speed, 'tts-1-hd' for quality).
         voice: Voice name ('nova' is clear and neutral; alternatives:
-            alloy, echo, fable, onyx, shimmer).
+            alloy, echo, fable, onyx, shimmer). Callers should generally
+            pass `settings.tts_voice` rather than relying on this default.
+        speed: Playback speed, 0.25-4.0 (OpenAI API range). Callers should
+            generally pass `settings.tts_speed` rather than relying on
+            this default.
 
     Returns:
         Path to the generated MP3 file.
@@ -35,6 +40,7 @@ async def generate_voiceover(
             model=model,
             voice=voice,
             input=script,
+            speed=speed,
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         response.stream_to_file(str(output_path))

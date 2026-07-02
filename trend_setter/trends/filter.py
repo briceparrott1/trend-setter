@@ -1,4 +1,4 @@
-"""Hard-gate topic filter: a topic must pass ALL 4 gates to proceed to research."""
+"""Hard-gate topic filter: a topic must pass every remaining gate to proceed."""
 
 from __future__ import annotations
 
@@ -17,24 +17,6 @@ class TopicCandidate:
     source: str  # 'google_trends' | 'youtube' | 'newsdataio'
     category: str | None = None
     raw: dict | None = None
-
-
-REJECT_CATEGORIES = frozenset(
-    {
-        "celebrity",
-        "gossip",
-        "sports",
-        "entertainment",
-        "gaming",
-        "music-charts",
-        "reality-tv",
-        # YouTube Data API v3 numeric category IDs for the same buckets.
-        "24",  # Entertainment
-        "20",  # Gaming
-        "17",  # Sports
-        "10",  # Music
-    }
-)
 
 
 def passes_gate_1_explainability(topic: TopicCandidate) -> bool:
@@ -85,26 +67,20 @@ def passes_gate_3_authoritative_sources(topic: TopicCandidate) -> bool:
     return True
 
 
-def passes_gate_4_not_gossip(topic: TopicCandidate) -> bool:
-    """Gate 4: topic must not be pure celebrity/sports/gossip.
-
-    Uses category metadata from the source feed where available.
-    """
-    if topic.category and topic.category.lower() in REJECT_CATEGORIES:
-        return False
-    # TODO: LLM-based content classification for topics with no category
-    # metadata.
-    return True
-
-
 def filter_topics(candidates: list[TopicCandidate]) -> list[TopicCandidate]:
-    """Apply all 4 gates. Returns only candidates that pass every gate."""
+    """Apply every gate. Returns only candidates that pass all of them.
+
+    There is no gossip/celebrity/sports rejection gate — scandalous,
+    polarizing, and celebrity-adjacent topics are intentionally allowed
+    through (and ranked ahead of bland ones by
+    `trends.aggregator.aggregate_trends`), per captain's direction to
+    prioritize engaging/provocative content over "safe" topics.
+    """
     if not candidates:
         return []
 
     gates = [
         passes_gate_1_explainability,
-        passes_gate_4_not_gossip,  # cheap — run before API calls
         passes_gate_3_authoritative_sources,
         passes_gate_2_surprising_angle,  # post-research
     ]

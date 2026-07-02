@@ -70,17 +70,20 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   requests) to avoid rate limits, capped at `kling_clips_per_video`
   (default 6) shot descriptions from the brief. Every clip's prompt is
   prefixed with `settings.kling_style_prefix` (default: cinematic
-  photorealistic documentary style, 4K, professional lighting) and sent
-  alongside `settings.kling_negative_prompt` (default: excludes cartoon/
+  photorealistic footage of real people actively demonstrating/reacting/
+  engaged in the action, dynamic handheld motion, 4K, professional
+  lighting — see "Engagement revamp" below) and sent alongside
+  `settings.kling_negative_prompt` (default: excludes cartoon/
   anime/CGI/illustration/low-quality) in the text2video payload — this
   keeps visual style consistent across all clips in a video instead of
   each shot description independently deciding style. Both are
   configurable via `KLING_STYLE_PREFIX` / `KLING_NEGATIVE_PROMPT` env
   vars, commented out with defaults shown in `.env.example`.
 - TTS voiceover: **OpenAI** (`OPENAI_API_KEY`, `generation/tts.py`) —
-  `tts-1` model, `nova` voice, run via `asyncio.to_thread` since the
-  `openai` SDK's `audio.speech.create` + `response.stream_to_file` are
-  sync calls.
+  `tts-1` model, voice/speed configurable via `Settings.tts_voice` /
+  `Settings.tts_speed` (defaults `"shimmer"` / `1.2`, see "Engagement
+  revamp" below), run via `asyncio.to_thread` since the `openai` SDK's
+  `audio.speech.create` + `response.stream_to_file` are sync calls.
 - Assembly (`generation/video.py:assemble_video`): **moviepy 1.x**
   (`from moviepy.editor import ...`) — pinned `<2.0.0` because moviepy 2.x
   renamed/removed the `moviepy.editor` module and changed several method
@@ -108,14 +111,17 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   (`import google.generativeai as genai`), not `vertexai`.
 - Video format: narrated explainer — Hook (0-3s) -> Core fact (4-20s) ->
   Supporting details (20-35s) -> Source/CTA (last 5-10s); 60-85 word
-  script; 6 x 5s Kling clips; TTS voiceover + animated text overlays.
-- Topic filter: 4-gate hard filter in `trends/filter.py`
+  script; 6 x 5s Kling clips; TTS voiceover + burned-in captions (see
+  "Engagement revamp" below).
+- Topic filter: 3-gate hard filter in `trends/filter.py`
   (`filter_topics`) — a candidate must pass every gate (explainable in
-  <45s, surprising angle, >=2 authoritative sources, not pure
-  gossip/celebrity/sports) before it reaches the research stage.
-  `aggregate_trends` in `trends/aggregator.py` builds the candidate list
-  (Google Trends + YouTube + a NewsData.io fetch it triggers itself) and
-  applies the filter before returning.
+  <45s, surprising angle, >=2 authoritative sources) before it reaches the
+  research stage. There is deliberately no gossip/celebrity/sports
+  rejection gate (see "Engagement revamp" below — it was removed, not
+  forgotten). `aggregate_trends` in `trends/aggregator.py` builds the
+  candidate list (Google Trends + YouTube + a NewsData.io fetch it
+  triggers itself), applies the filter, then ranks survivors by
+  controversy score before truncating to `max_trends`.
 
 - Progressive run report: `trend_setter/report.py`'s `RunReport` writes a
   JSON file to `{video_output_dir}/report_{timestamp}.json` and rewrites
@@ -198,3 +204,91 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   than `max(1, kling_clips_per_video // 2)` clips succeeded. Callers of
   `generate_all_clips` (i.e. `generate_video`) should expect the returned
   list to sometimes be shorter than the requested clip count.
+
+## Engagement revamp (captain's direction, PR "reel-revamp")
+
+- **Gossip/celebrity gate removed by design.** `filter.py` used to have a
+  4th gate (`passes_gate_4_not_gossip` + `REJECT_CATEGORIES`) rejecting
+  celebrity/gossip/sports/gaming/entertainment/music candidates. It has
+  been deleted outright — the captain wants scandalous/polarizing content,
+  not "safe" educational-only topics. `filter_topics` now runs 3 gates,
+  not 4. Don't re-add a gossip gate without re-confirming with the captain
+  first; that was a deliberate reversal, not an oversight.
+- **Controversy ranking, not gating.** `aggregator.py`'s `aggregate_trends`
+  now ranks filtered candidates by `_controversy_score` (a keyword-count
+  heuristic over `_CONTROVERSY_KEYWORDS` — same cheap/deterministic style
+  as gate 1's explainability heuristic, no LLM call) before truncating to
+  `max_trends`, so a candidate whose title reads as scandalous/divisive
+  ("accused", "scandal", "backlash", "banned", etc.) sorts ahead of a
+  neutral one. This is a *ranking* step only — it never removes a
+  candidate, it only reorders survivors of `filter_topics`. `sorted(...,
+  reverse=True)` is stable, so ties keep their original (source-priority)
+  order; this is depended on by
+  `test_aggregate_trends_dedupes_case_and_whitespace_across_sources` in
+  `tests/test_trends.py`, don't swap in an unstable sort.
+- **Burned-in captions are timing-estimated, not exact.** OpenAI TTS
+  returns no word/phoneme-level alignment data, so `video.py`'s
+  `_estimate_caption_segments` splits the script on sentence/clause breaks
+  (`_split_script_into_captions`, regex on `.!?,`) and distributes the
+  final (voiceover-matched) duration across segments proportional to each
+  segment's word count. This is "good enough" sync by design — expect
+  captions to drift slightly from the actual spoken word, especially for
+  segments with many short/long words. `assemble_video` now takes a
+  required `script` param (signature change) and composites
+  `_build_subtitle_clips`'s `TextClip`s over the trimmed/looped video via
+  `CompositeVideoClip` before attaching audio. Caption styling (white
+  text, black stroke, positioned at 70% of frame height via a *relative*
+  `set_position(("center", 0.7), relative=True)`, sized to 90% of frame
+  width) lives in `_build_subtitle_clips`, which takes the assembled
+  video's actual `(width, height)` (`video.size`) as a parameter rather
+  than a hardcoded constant — an earlier version hardcoded
+  `CAPTION_VIDEO_SIZE = (1080, 1920)` assuming Kling's clips are always
+  9:16, but that silently mispositioned captions whenever the assembled
+  video's real dimensions differed; this was fixed by reading `video.size`
+  directly. Adjust `_build_subtitle_clips` if legibility needs tuning.
+  **New runtime dependency:** moviepy 1.x's `TextClip` shells out to
+  ImageMagick's `convert` binary — it must be installed and on `PATH` in
+  any environment that actually renders video (not needed for the test
+  suite, which mocks `moviepy.editor.TextClip`/`CompositeVideoClip`
+  entirely).
+- **TTS voice/speed are now `Settings` fields**, not hardcoded in
+  `tts.py`: `tts_voice` (default `"shimmer"`, chosen as OpenAI's
+  brightest/most energetic voice) and `tts_speed` (default `1.2`, in the
+  API's 0.25-4.0 range) — both passed through from `generate_video` into
+  `generate_voiceover`. Tune these directly via `.env` (`TTS_VOICE`,
+  `TTS_SPEED`) without a code change if the captain wants a different
+  voice/pace after listening to real output.
+- **`kling_style_prefix` default now biases toward people-in-motion, not
+  static b-roll** ("real people actively demonstrating, reacting to, or
+  engaged in the action described, dynamic handheld motion" instead of
+  "documentary footage"). This pairs with a `brief.py` prompt change:
+  `SCRIPT_PROMPT`'s shot-description instruction used to explicitly say
+  "no text/people" — that was the actual root cause of static, peopleless
+  b-roll and has been reversed to *require* each shot feature people
+  actively doing something concrete and relevant to the topic. The
+  "no on-screen text" restriction was kept (Kling rendering in-scene text
+  reliably looks bad) — only the "no people" half was reversed.
+- **Hook attribution guardrail is a prompt-engineering change with no
+  code-level verifier, by design.** The captain wants clip-1 hooks to use
+  "did you know [named person] believes/claims [Y]" when research
+  actually supports a specific sourced claim attributable to one named
+  person, contextualized in the next beat with "according to [named
+  person]...", but falling back to a non-attributed hook ("some
+  believe...", "reportedly...") whenever it doesn't. `SCRIPT_PROMPT` in
+  `brief.py` now spells out both branches and the condition explicitly,
+  and `generate_brief` now builds a `research_notes` field (joining
+  `research["raw_answer"]` — the full Perplexity prose — plus
+  `research["wikipedia"]["extract"]` when present) and passes it into the
+  prompt, since the pre-extracted `hook_fact`/`supporting_facts` fields
+  are usually too condensed for the model to judge attribution quality
+  from. **This is inherently a model-judgment call that cannot be
+  deterministically unit-tested for content correctness** — there is no
+  reliable code-level way to verify "did the model correctly judge
+  whether this claim is attributable" (regex-matching for named-entity
+  patterns would be unreliable and was deliberately not attempted). The
+  tests in `tests/test_brief.py` only check the prompt text itself and
+  that `generate_brief` feeds raw research context through — they cannot
+  and do not verify the model actually picks the right branch. Treat any
+  future concern about hallucinated attribution as something to spot-check
+  manually against real pipeline output (or refine via prompt iteration),
+  not something to chase with a stricter automated check.

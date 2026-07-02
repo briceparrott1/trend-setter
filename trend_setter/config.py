@@ -35,8 +35,9 @@ class Settings(BaseSettings):
     kling_clip_duration: int = 5  # seconds per clip; 5 or 10 supported
     kling_clips_per_video: int = 6  # 6 x 5s = 30s total
     kling_style_prefix: str = (
-        "Cinematic photorealistic documentary footage, 4K, professional lighting, "
-        "high production value:"
+        "Cinematic photorealistic footage of real people actively demonstrating, "
+        "reacting to, or engaged in the action described, dynamic handheld motion, "
+        "4K, professional lighting, high production value:"
     )
     kling_negative_prompt: str = (
         "cartoon, anime, illustration, CGI, 3D animation, sketch, painting, "
@@ -45,6 +46,10 @@ class Settings(BaseSettings):
 
     # OpenAI (TTS voiceover)
     openai_api_key: str
+    # "shimmer" is the brightest/most energetic OpenAI voice; alternatives:
+    # alloy, echo, fable, onyx, nova.
+    tts_voice: str = "shimmer"
+    tts_speed: float = 1.2  # 0.25-4.0 (OpenAI API range); faster, punchier delivery
 
     # Video output
     video_output_dir: str = "output"

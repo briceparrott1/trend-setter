@@ -2,11 +2,85 @@
 
 from __future__ import annotations
 
+import re
+
 from trend_setter.config import Settings
 from trend_setter.trends.filter import TopicCandidate, filter_topics
 from trend_setter.trends.google_trends import GoogleTrend
 from trend_setter.trends.newsdataio import fetch_trending_news
 from trend_setter.trends.youtube import YouTubeTrend
+
+# Keyword heuristic for "scandalous/polarizing/controversial" signal — same
+# cheap, deterministic style as the gate-1 explainability heuristic in
+# `trends/filter.py`. Not exhaustive; a candidate's score is just how many
+# of these keywords appear in its title (case-insensitive, whole-word match
+# via `_CONTROVERSY_KEYWORD_PATTERN` — substrings inside other words don't
+# count, e.g. "banned" won't match inside "bannednews").
+_CONTROVERSY_KEYWORDS = frozenset(
+    {
+        "scandal",
+        "scandalous",
+        "backlash",
+        "slammed",
+        "slams",
+        "accused",
+        "accusation",
+        "accusations",
+        "controversy",
+        "controversial",
+        "banned",
+        "ban",
+        "feud",
+        "outrage",
+        "outraged",
+        "outrages",
+        "exposed",
+        "expose",
+        "blasted",
+        "fury",
+        "furious",
+        "boycott",
+        "boycotted",
+        "cover-up",
+        "coverup",
+        "lawsuit",
+        "sues",
+        "sued",
+        "shocking",
+        "explosive",
+        "denies",
+        "denied",
+        "criticized",
+        "criticised",
+        "condemn",
+        "condemned",
+        "backfire",
+        "backfired",
+        "leaked",
+        "scandal-hit",
+        "under fire",
+        "fired",
+        "resigns",
+        "resign",
+        "apologizes",
+        "apologises",
+    }
+)
+
+_CONTROVERSY_KEYWORD_PATTERN = re.compile(
+    "|".join(rf"\b{re.escape(keyword)}\b" for keyword in _CONTROVERSY_KEYWORDS)
+)
+
+
+def _controversy_score(candidate: TopicCandidate) -> int:
+    """Cheap keyword count of scandal/controversy signal in a candidate's title.
+
+    Higher score = more provocative/divisive-reading. Used purely to rank
+    already-filtered candidates before truncating to `max_trends`; it does
+    not gate anything.
+    """
+    title_lower = candidate.title.lower()
+    return len(_CONTROVERSY_KEYWORD_PATTERN.findall(title_lower))
 
 
 async def aggregate_trends(
@@ -19,7 +93,7 @@ async def aggregate_trends(
 
     Fetches NewsData.io headlines directly and combines them with the
     already-fetched Google Trends and YouTube signals before running every
-    candidate through the 4-gate filter in `trends/filter.py`.
+    candidate through the 3-gate filter in `trends/filter.py`.
 
     Args:
         google_trends: Rising queries fetched from Google Trends.
@@ -27,8 +101,15 @@ async def aggregate_trends(
         settings: App settings, used to fetch NewsData.io headlines.
         max_trends: Maximum number of candidates to return after filtering.
 
+    Candidates that survive the filter are then ranked by
+    `_controversy_score` (most scandalous/polarizing-reading title first,
+    stable sort preserving source-priority order among ties) before being
+    capped at `max_trends`, per captain's direction to prioritize
+    provocative topics over bland ones.
+
     Returns:
-        Topic candidates that passed all 4 gates, capped at `max_trends`.
+        Topic candidates that passed every gate, ranked by controversy
+        score, capped at `max_trends`.
     """
     news_articles = await fetch_trending_news(settings)
     candidates = [
@@ -54,4 +135,6 @@ async def aggregate_trends(
         seen.add(key)
         unique_candidates.append(candidate)
 
-    return filter_topics(unique_candidates)[:max_trends]
+    filtered = filter_topics(unique_candidates)
+    ranked = sorted(filtered, key=_controversy_score, reverse=True)
+    return ranked[:max_trends]
